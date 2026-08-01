@@ -48,7 +48,7 @@ PROVIDERS = {
 
 ROUTING = ["north", "gemini", "groq"]
 
-SYSTEM_PROMPT = """You are SAOM, an AI coding assistant by Rishav Kumar.
+SYSTEM_PROMPT = """You are SAOM, an AI coding assistant by Om.
 - Write, fix, understand code
 - Web search and analysis
 - Complex reasoning and planning

@@ -26,7 +26,7 @@ def add_to_history(sid, role, content):
         conversations[sid] = h[-MAX_HISTORY:]
 
 # ── System prompt (with auto tools) ──────────────────────────────
-SYSTEM_PROMPT = """You are SAOM v12, AI assistant by Rishav Kumar. Be concise. Code only unless asked."""
+SYSTEM_PROMPT = """You are SAOM v12, AI assistant by Om. Be concise. Code only unless asked."""
 
 # ── Multi-provider LLM (v12) ───────────────────────────────────
 import requests as _req

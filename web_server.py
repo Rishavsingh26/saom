@@ -106,10 +106,22 @@ def _call_llm_stream(messages, max_tokens=500, temp=0.5):
     yield "[Error] All LLM providers failed. Set GEMINI_API_KEY or GROQ_API_KEY."
 
 def _call_llm(messages, max_tokens=500, temp=0.5):
-    """Non-streaming LLM call with fallback."""
+    """Non-streaming LLM call with fallback.
+
+    Bug fix: this used to do `for chunk in _call_llm_stream(...): pass` and then
+    return the loop variable `chunk`, which after the loop only holds the LAST
+    item yielded. For streaming providers (e.g. the default free "zen" provider)
+    the text arrives as many small chunks, so this silently returned just the
+    final fragment of the reply and threw away everything before it. It also
+    didn't skip the leading `{"provider": ...}` dict the generator yields first.
+    Now we accumulate every text chunk and skip non-string metadata items.
+    """
+    full = ""
     for chunk in _call_llm_stream(messages, max_tokens, temp):
-        pass
-    return chunk if chunk else "[Error]"
+        if isinstance(chunk, dict):
+            continue
+        full += chunk
+    return full if full else "[Error]"
 
 # ── SAOM CLI helpers ─────────────────────────────────────────────
 def _saom_cmd(*args):

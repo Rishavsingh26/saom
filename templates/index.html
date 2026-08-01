@@ -6,12 +6,12 @@
 <title>SAOM</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-:root{--bg:#0a0a0a;--surface:#141414;--surface2:#1a1a1a;--border:#222;--text:#e5e5e5;--text2:#888;--accent:#6366f1;--user:#6366f1;--bot:#1a1a1a;--green:#22c55e}
+:root{--bg:#0a0a0a;--surface:#111;--surface2:#1a1a1a;--surface3:#222;--border:#2a2a2a;--text:#e5e5e5;--text2:#888;--text3:#555;--accent:#6366f1;--user:#6366f1;--bot:#141414;--green:#22c55e;--glass:rgba(255,255,255,0.04)}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100dvh;overflow:hidden}
-#app{display:flex;flex-direction:column;height:100dvh;max-width:800px;margin:0 auto}
+#app{display:flex;flex-direction:column;height:100dvh;max-width:800px;margin:0 auto;position:relative}
 
-/* Header */
-header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:var(--bg);flex-shrink:0}
+/* Glass header */
+header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:rgba(10,10,10,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);flex-shrink:0;position:sticky;top:0;z-index:10}
 .logo{display:flex;align-items:center;gap:8px}
 .logo svg{width:24px;height:24px}
 .logo span{font-weight:600;font-size:15px}
@@ -19,22 +19,31 @@ header{padding:12px 16px;display:flex;align-items:center;justify-content:space-b
 .dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
 .dot.loading{animation:pulse 1s infinite}
 @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
-.llm-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--surface2);color:var(--text2);border:1px solid var(--border)}
+.llm-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--surface3);color:var(--text2);border:1px solid var(--border);cursor:default;transition:background .2s}
+.llm-badge:hover{background:var(--border)}
+.header-actions{display:flex;align-items:center;gap:8px}
+.icon-btn{background:none;border:none;color:var(--text2);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:background .2s}
+.icon-btn:hover{background:var(--surface3)}
+.icon-btn svg{width:16px;height:16px}
 
 /* Messages */
 #messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth}
-.msg{display:flex;gap:10px;max-width:100%;animation:fadeIn .2s ease}
+.msg{display:flex;gap:10px;max-width:100%;animation:fadeIn .2s ease;position:relative}
 @keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.msg:hover .copy-btn{opacity:1}
 .avatar{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
 .avatar.user{background:var(--accent);color:#fff}
-.avatar.bot{background:var(--surface2);color:var(--text2)}
+.avatar.bot{background:var(--surface3);color:var(--text2)}
 .msg-content{flex:1;min-width:0}
 .msg-name{font-size:11px;font-weight:600;margin-bottom:4px;color:var(--text2)}
-.msg-text{font-size:14px;line-height:1.6;white-space:pre-wrap;word-break:break-word}
-.msg-text code{background:var(--surface2);padding:1px 4px;border-radius:3px;font-size:13px;font-family:'SF Mono',Consolas,monospace}
-.msg-text pre{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px;margin:8px 0;overflow-x:auto}
+.msg-text{font-size:14px;line-height:1.65;white-space:pre-wrap;word-break:break-word;padding:10px 14px;background:var(--bot);border-radius:12px 12px 12px 4px;position:relative}
+.msg.user .msg-text{background:var(--accent);color:#fff;border-radius:12px 12px 4px 12px}
+.msg-text code{background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;font-size:13px;font-family:'SF Mono',Consolas,monospace}
+.msg-text pre{background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:8px;padding:12px;margin:8px 0;overflow-x:auto}
 .msg-text pre code{background:none;padding:0}
-.msg-time{font-size:10px;color:var(--text2);margin-top:4px;opacity:.6}
+.msg-time{font-size:10px;color:var(--text3);margin-top:4px;opacity:.7}
+.copy-btn{position:absolute;top:6px;right:6px;opacity:0;transition:opacity .2s;background:var(--surface3);border:none;color:var(--text2);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:10px}
+.copy-btn:hover{background:var(--border);color:var(--text)}
 .cursor{display:inline-block;width:2px;height:14px;background:var(--accent);margin-left:2px;animation:blink 1s infinite;vertical-align:text-bottom}
 @keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}
 
@@ -46,26 +55,37 @@ header{padding:12px 16px;display:flex;align-items:center;justify-content:space-b
 @keyframes bounce{0%,80%,100%{transform:scale(.5);opacity:.3}40%{transform:scale(1);opacity:1}}
 
 /* Input */
-#input-area{padding:12px 16px;border-top:1px solid var(--border);background:var(--bg);flex-shrink:0}
+#input-area{padding:12px 16px;border-top:1px solid var(--border);background:rgba(10,10,10,0.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);flex-shrink:0}
 #input-wrap{display:flex;align-items:flex-end;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px 12px;transition:border-color .2s}
 #input-wrap:focus-within{border-color:var(--accent)}
-#chat-input{flex:1;background:none;border:none;color:var(--text);font-size:14px;font-family:inherit;outline:none;resize:none;max-height:120px;line-height:1.5}
-#chat-input::placeholder{color:var(--text2)}
-#send-btn{width:32px;height:32px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .2s}
-#send-btn:disabled{opacity:.3;cursor:not-allowed}
+#chat-input{flex:1;background:none;border:none;color:var(--text);font-size:14px;font-family:inherit;outline:none;resize:none;max-height:120px}
+#chat-input::placeholder{color:var(--text3)}
+#send-btn{width:32px;height:32px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .2s,transform .1s}
+#send-btn:hover{transform:scale(1.05)}
+#send-btn:disabled{opacity:.3;cursor:not-allowed;transform:none}
 #send-btn svg{width:16px;height:16px}
 
+/* Feedback */
+.msg-feedback{display:flex;gap:4px;margin-top:4px;opacity:0;transition:opacity .2s}
+.msg:hover .msg-feedback{opacity:1}
+.feedback-btn{background:none;border:1px solid var(--border);color:var(--text3);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:10px;transition:all .2s}
+.feedback-btn:hover{border-color:var(--accent);color:var(--accent)}
+.feedback-btn.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+
 /* Footer */
-footer{padding:8px 16px;text-align:center;font-size:10px;color:var(--text2);border-top:1px solid var(--border);flex-shrink:0}
+footer{padding:8px 16px;text-align:center;font-size:10px;color:var(--text3);border-top:1px solid var(--border);flex-shrink:0}
 
 /* Mobile */
 @media(max-width:640px){
   #app{max-width:100%}
   header{padding:10px 12px}
-  #messages{padding:12px}
+  #messages{padding:12px;gap:12px}
   #input-area{padding:8px 12px}
   .avatar{width:24px;height:24px;font-size:10px}
-  .msg-text{font-size:13px}
+  .msg-text{font-size:13px;padding:8px 10px}
+  .msg-content .msg-name{font-size:10px}
+  .copy-btn{opacity:1}
+  .msg-feedback{opacity:1}
 }
 </style>
 </head>
@@ -76,8 +96,11 @@ footer{padding:8px 16px;text-align:center;font-size:10px;color:var(--text2);bord
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
       <span>SAOM</span>
     </div>
-    <div style="display:flex;align-items:center;gap:8px">
+    <div class="header-actions">
       <span class="llm-badge" id="llm">north-mini-code-free</span>
+      <button class="icon-btn" id="clear-btn" title="Clear chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/></svg>
+      </button>
       <div class="status"><span class="dot" id="dot"></span><span id="status-text">Ready</span></div>
     </div>
   </header>
@@ -101,29 +124,93 @@ footer{padding:8px 16px;text-align:center;font-size:10px;color:var(--text2);bord
 </div>
 <script>
 var SESSION='s'+Date.now(),WORKING=false;
+var CONV_HISTORY=[];
+var MAX_HISTORY=20;
+
 document.getElementById('greeting-time').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+
+// Load persisted session
+(function(){
+  var saved=localStorage.getItem('saom_session');
+  if(saved){
+    try{
+      var data=JSON.parse(saved);
+      if(data.history&&data.history.length){
+        CONV_HISTORY=data.history;
+        SESSION=data.sessionId||SESSION;
+        var m=document.getElementById('messages');
+        m.innerHTML='';
+        for(var i=0;i<data.history.length;i++){
+          var h=data.history[i];
+          addMsg(h.role,h.content,h.name,false);
+        }
+        scrollBottom();
+      }
+    }catch(e){}
+  }
+})();
+
+function saveSession(){
+  try{
+    localStorage.setItem('saom_session',JSON.stringify({
+      sessionId:SESSION,
+      history:CONV_HISTORY.slice(-MAX_HISTORY)
+    }));
+  }catch(e){}
+}
 
 function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}
 function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px'}
 function setStatus(s,t){document.getElementById('dot').className='dot'+(s==='working'?' loading':'');document.getElementById('status-text').textContent=t}
 function scrollBottom(){var m=document.getElementById('messages');m.scrollTop=m.scrollHeight}
-function addMsg(role,text,name){
-  var d=document.createElement('div');d.className='msg';
+
+function addMsg(role,text,name,save){
+  if(save===undefined)save=true;
+  var d=document.createElement('div');d.className='msg '+(role==='user'?'user':'');
   var av=role==='user'?'<div class="avatar user">Y</div>':'<div class="avatar bot">O</div>';
   var nm=name||(role==='user'?'You':'SAOM');
-  d.innerHTML=av+'<div class="msg-content"><div class="msg-name">'+nm+'</div><div class="msg-text"></div><div class="msg-time">'+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
+  var escaped=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  d.innerHTML=av+'<div class="msg-content"><div class="msg-name">'+nm+'</div><div class="msg-text">'+escaped+'<button class="copy-btn" onclick="copyMsg(this)">Copy</button><div class="msg-feedback"><button class="feedback-btn" onclick="feedback(this,1)">&#9650;</button><button class="feedback-btn" onclick="feedback(this,0)">&#9660;</button></div></div><div class="msg-time">'+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
   document.getElementById('messages').appendChild(d);
   scrollBottom();
+  if(save){
+    CONV_HISTORY.push({role:role,content:text,name:nm});
+    saveSession();
+  }
   return d.querySelector('.msg-text');
 }
+
+function copyMsg(btn){
+  var text=btn.parentElement.textContent.replace('Copy','').replace('▲','').replace('▼','').trim();
+  navigator.clipboard.writeText(text).then(function(){
+    btn.textContent='Copied!';
+    setTimeout(function(){btn.textContent='Copy'},1500);
+  }).catch(function(){
+    btn.textContent='Failed';
+    setTimeout(function(){btn.textContent='Copy'},1500);
+  });
+}
+
+function feedback(btn,liked){
+  btn.classList.add('active');
+  setTimeout(function(){btn.classList.remove('active')},1000);
+}
+
 function showTyping(){
   var d=document.createElement('div');d.className='msg';d.id='typing-msg';
   d.innerHTML='<div class="avatar bot">O</div><div class="msg-content"><div class="msg-name">SAOM</div><div class="typing"><span></span><span></span><span></span></div></div>';
   document.getElementById('messages').appendChild(d);scrollBottom();
 }
 function removeTyping(){var e=document.getElementById('typing-msg');if(e)e.remove()}
+function clearChat(){
+  CONV_HISTORY=[];
+  document.getElementById('messages').innerHTML='';
+  addMsg('bot','Hey! I\'m SAOM v12. Ask me anything.','SAOM',true);
+  saveSession();
+}
+document.getElementById('clear-btn').addEventListener('click',clearChat);
 
-async async function send(){
+async function send(){
   var input=document.getElementById('chat-input');
   var msg=input.value.trim();
   if(!msg||WORKING)return;
@@ -140,10 +227,11 @@ async async function send(){
       if(done)break;
       buf+=dec.decode(value,{stream:true});
       var lines=buf.split('\n');buf=lines.pop();
-      for(var line of lines){
-        if(!line.startsWith('data:'))continue;
+      for(var i=0;i<lines.length;i++){
+        var line=lines[i];
+        if(!line.startsWith('data: '))continue;
         try{
-          var c=JSON.parse(line.slice(5));
+          var c=JSON.parse(line.slice(6));
           if(c.provider){document.getElementById('llm').textContent=c.provider;continue}
           if(!started){removeTyping();el=addMsg('assistant','');body=el;started=true;setStatus('working','Generating...')}
           if(c.chunk){body.textContent+=c.chunk;scrollBottom()}

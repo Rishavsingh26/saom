@@ -123,7 +123,7 @@ function showTyping(){
 }
 function removeTyping(){var e=document.getElementById('typing-msg');if(e)e.remove()}
 
-async function send(){
+async async function send(){
   var input=document.getElementById('chat-input');
   var msg=input.value.trim();
   if(!msg||WORKING)return;

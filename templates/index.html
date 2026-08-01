@@ -44,6 +44,9 @@ header{padding:12px 16px;display:flex;align-items:center;justify-content:space-b
 .msg-actions{display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);gap:8px}
 .copy-btn{background:none;border:none;color:var(--text2);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:4px;transition:all .2s;opacity:0.8}
 .copy-btn:hover{background:var(--surface3);color:var(--text);opacity:1}
+.msg.user .msg-actions{border-top-color:rgba(255,255,255,0.18)}
+.msg.user .copy-btn{color:rgba(255,255,255,0.75)}
+.msg.user .copy-btn:hover{background:rgba(255,255,255,0.15);color:#fff}
 .msg-feedback{display:flex;gap:4px;margin-left:auto}
 .feedback-btn{background:none;border:none;color:var(--text3);cursor:pointer;padding:2px 4px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;transition:all .2s}
 .feedback-btn:hover{color:var(--accent)}
@@ -145,12 +148,36 @@ function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrol
 function setStatus(s,t){document.getElementById('dot').className='dot'+(s==='working'?' loading':'');document.getElementById('status-text').textContent=t}
 function scrollBottom(){var m=document.getElementById('messages');m.scrollTop=m.scrollHeight}
 
-function attachActions(msgTextEl){
+function attachActions(msgTextEl,role){
   if(msgTextEl.querySelector('.msg-actions')) return;
   var actions=document.createElement('div');
   actions.className='msg-actions';
-  actions.innerHTML='<button class="copy-btn" onclick="copyMsg(this)" title="Copy text"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg><span>Copy</span></button><div class="msg-feedback"><button class="feedback-btn" onclick="feedback(this,1)" title="Helpful"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button class="feedback-btn" onclick="feedback(this,0)" title="Not helpful"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3zm7-13h3a2 2 0 012 2v7a2 2 0 01-2 2h-3"/></svg></button></div>';
+  var html='<button class="copy-btn" onclick="copyMsg(this)" title="Copy text"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg><span>Copy</span></button>';
+  // Feedback (helpful/not helpful) only makes sense on the assistant's replies,
+  // not on the user's own message bubble.
+  if(role!=='user'){
+    html+='<div class="msg-feedback"><button class="feedback-btn" onclick="feedback(this,1)" title="Helpful"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button class="feedback-btn" onclick="feedback(this,0)" title="Not helpful"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3zm7-13h3a2 2 0 012 2v7a2 2 0 01-2 2h-3"/></svg></button></div>';
+  }
+  actions.innerHTML=html;
   msgTextEl.appendChild(actions);
+}
+
+// Minimal, safe markdown-ish rendering: escapes HTML first (so nothing the
+// model or user typed can inject markup), then turns ```code fences```,
+// `inline code`, and **bold** into real elements. The CSS already has
+// .msg-text pre/code rules defined but nothing used to actually produce
+// <pre>/<code> elements — messages were always plain text.
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function renderRichText(text){
+  var out=escapeHtml(text);
+  out=out.replace(/```[a-zA-Z0-9_+-]*\n?([\s\S]*?)```/g,function(m,code){
+    return '<pre><code>'+code.replace(/\n$/,'')+'</code></pre>';
+  });
+  out=out.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  out=out.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
+  return out;
 }
 
 function addMsg(role,text,name,save){
@@ -164,7 +191,7 @@ function addMsg(role,text,name,save){
   
   var msgText=d.querySelector('.msg-text');
   var msgBody=d.querySelector('.msg-body');
-  msgBody.textContent=text;
+  msgBody.innerHTML=renderRichText(text);
 
   document.getElementById('messages').appendChild(d);
   scrollBottom();
@@ -177,7 +204,7 @@ function addMsg(role,text,name,save){
   }
 
   if(text && text.length>0){
-    attachActions(msgText);
+    attachActions(msgText,role);
   }
 
   return {msgText:msgText, msgBody:msgBody, historyIndex:idx};
@@ -269,7 +296,7 @@ async function send(){
           }
           if(c.done&&c.full&&msgObj){
             fullText=c.full;
-            msgObj.msgBody.textContent=fullText;
+            msgObj.msgBody.innerHTML=renderRichText(fullText);
             if(msgObj.historyIndex>=0 && CONV_HISTORY[msgObj.historyIndex]){
               CONV_HISTORY[msgObj.historyIndex].content=fullText;
               saveSession();
@@ -288,8 +315,8 @@ async function send(){
     
     // STREAMING CLOSED -> Attach Copy/Feedback actions & update saved history
     if(msgObj && msgObj.msgText){
-      msgObj.msgBody.textContent=fullText;
-      attachActions(msgObj.msgText);
+      msgObj.msgBody.innerHTML=renderRichText(fullText);
+      attachActions(msgObj.msgText,'assistant');
       if(msgObj.historyIndex>=0 && CONV_HISTORY[msgObj.historyIndex]){
         CONV_HISTORY[msgObj.historyIndex].content=fullText;
         saveSession();

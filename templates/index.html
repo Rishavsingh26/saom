@@ -36,6 +36,7 @@ header{padding:12px 16px;display:flex;align-items:center;justify-content:space-b
 .msg-name{font-size:11px;font-weight:600;margin-bottom:4px;color:var(--text2)}
 .msg-text{font-size:14px;line-height:1.65;padding:10px 14px;background:var(--bot);border-radius:12px 12px 12px 4px;position:relative;min-height:20px}
 .msg.user .msg-text{background:var(--accent);color:#fff;border-radius:12px 12px 4px 12px}
+.msg-stream{white-space:pre-wrap;word-break:break-word}
 .msg-text code{background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;font-size:13px;font-family:'SF Mono',Consolas,monospace}
 .msg-text pre{background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:8px;padding:12px;margin:8px 0;overflow-x:auto}
 .msg-text pre code{background:none;padding:0}
@@ -162,7 +163,7 @@ function addMsg(role,text,name,save){
   var av=role==='user'?'<div class="avatar user">Y</div>':'<div class="avatar bot">O</div>';
   var nm=name||(role==='user'?'You':'SAOM');
   var escaped=text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  d.innerHTML=av+'<div class="msg-content"><div class="msg-name">'+nm+'</div><div class="msg-text" data-full="'+escaped+'">'+escaped+'<button class="copy-btn" onclick="copyMsg(this)">Copy</button><div class="msg-feedback"><button class="feedback-btn" onclick="feedback(this,1)">&#9650;</button><button class="feedback-btn" onclick="feedback(this,0)">&#9660;</button></div></div><div class="msg-time">'+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
+  d.innerHTML=av+'<div class="msg-content"><div class="msg-name">'+nm+'</div><div class="msg-text"><span class="msg-stream">'+escaped+'</span><button class="copy-btn" onclick="copyMsg(this)">Copy</button><div class="msg-feedback"><button class="feedback-btn" onclick="feedback(this,1)">&#9650;</button><button class="feedback-btn" onclick="feedback(this,0)">&#9660;</button></div></div><div class="msg-time">'+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
   document.getElementById('messages').appendChild(d);
   scrollBottom();
   if(save){
@@ -173,8 +174,8 @@ function addMsg(role,text,name,save){
 }
 
 function copyMsg(btn){
-  var msgText=btn.parentElement;
-  var text=msgText.getAttribute('data-full')||msgText.textContent.replace('Copy','').trim();
+  var stream=btn.parentElement.querySelector('.msg-stream');
+  var text=stream?stream.textContent:'';
   navigator.clipboard.writeText(text).then(function(){
     btn.textContent='Copied!';
     setTimeout(function(){btn.textContent='Copy'},1500);
@@ -226,9 +227,9 @@ async function send(){
         try{
           var c=JSON.parse(line.slice(6));
           if(c.provider){document.getElementById('llm').textContent=c.provider;continue}
-          if(!started){removeTyping();el=addMsg('assistant','');started=true;setStatus('working','Generating...')}
-          if(c.chunk&&el){el.textContent+=c.chunk;el.setAttribute('data-full',el.textContent);scrollBottom()}
-          if(c.done&&c.full&&el){el.textContent=c.full;el.setAttribute('data-full',c.full);scrollBottom()}
+          if(!started){removeTyping();el=addMsg('assistant','');body=el.querySelector('.msg-stream');started=true;setStatus('working','Generating...')}
+          if(c.chunk&&body){body.textContent+=c.chunk;scrollBottom()}
+          if(c.done&&c.full&&body){body.textContent=c.full;scrollBottom()}
         }catch(e){}
       }
     }

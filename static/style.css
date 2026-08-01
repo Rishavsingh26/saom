@@ -78,3 +78,21 @@ a:hover { text-decoration: underline; }
 .cmd-item:hover { background: #1f6feb22; border-color: #58a6ff; }
 
 footer { padding: 6px 20px; background: #161b22; border-top: 1px solid #30363d; display: flex; justify-content: space-between; font-size: 11px; color: #484f58; }
+
+/* Mobile */
+@media (max-width: 768px) {
+  header { flex-wrap: wrap; padding: 8px 12px; }
+  header h1 { font-size: 14px; }
+  #header-actions { gap: 4px; }
+  .btn-small { padding: 3px 6px; font-size: 10px; }
+  #main { flex-direction: column; }
+  #sidebar { width: 100%; height: auto; max-height: 40vh; border-right: none; border-bottom: 1px solid #30363d; padding: 8px; }
+  #sidebar h3 { margin-top: 6px; }
+  #cmd-list { display: flex; flex-wrap: wrap; gap: 4px; }
+  .cmd-item { flex: 0 0 auto; }
+  #chat-messages { padding: 8px; }
+  .msg { max-width: 90%; }
+  #chat-input-area { padding: 8px; }
+  #chat-input { font-size: 16px; }
+  footer { flex-direction: column; gap: 2px; padding: 4px 12px; }
+}

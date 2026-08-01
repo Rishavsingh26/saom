@@ -46,20 +46,20 @@ RULES:
 - Remember context from earlier in this conversation
 - If corrected, remember the correction"""
 
-# ── Multi-provider LLM (v11) ───────────────────────────────────
+# ── Multi-provider LLM (v12) ───────────────────────────────────
 import requests as _req
 
 _GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "")
 _GROQ_KEY = os.environ.get("GROQ_API_KEY", "")
 
 _PROVIDER_CHAIN = [
+    ("zen", "north-mini-code-free", "https://opencode.ai/zen/v1/chat/completions"),
     ("gemini", "gemini-3.5-flash", "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={key}"),
     ("groq", "llama-3.3-70b-versatile", "https://api.groq.com/openai/v1/chat/completions"),
-    ("zen", "mimo-v2.5-free", "https://opencode.ai/zen/v1/chat/completions"),
 ]
 
 def _call_llm_stream(messages, max_tokens=500, temp=0.5):
-    """Try providers in order, yield chunks. Falls back on failure."""
+    """Try providers in order: north (free) -> gemini -> groq. Yield chunks."""
     for prov_name, model, url in _PROVIDER_CHAIN:
         try:
             if prov_name == "gemini":
@@ -91,14 +91,16 @@ def _call_llm_stream(messages, max_tokens=500, temp=0.5):
                     yield text
                     return
             else:
+                # Zen/north — free, no key needed
                 r = _req.post(url, json={"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temp, "apiKey": "public", "stream": True},
-                    headers={"Content-Type": "application/json", "User-Agent": "SAOM/1.0"}, stream=True, timeout=60)
+                    headers={"Content-Type": "application/json", "User-Agent": "SAOM/12"}, stream=True, timeout=60)
                 if r.status_code != 200:
                     continue
+                full = ""
                 for line in r.iter_lines():
                     if not line:
                         continue
-                    line = line.decode("utf-8")
+                    line = line.decode("utf-8", errors="replace")
                     if not line.startswith("data: "):
                         continue
                     payload_str = line[6:]
@@ -108,13 +110,15 @@ def _call_llm_stream(messages, max_tokens=500, temp=0.5):
                         chunk = json.loads(payload_str)
                         content = chunk.get("choices", [{}])[0].get("delta", {}).get("content", "")
                         if content:
+                            full += content
                             yield content
                     except:
                         pass
-                return
+                if full:
+                    return
         except Exception:
             continue
-    yield "[Error] All LLM providers failed"
+    yield "[Error] All LLM providers failed. Set GEMINI_API_KEY or GROQ_API_KEY."
 
 def _call_llm(messages, max_tokens=500, temp=0.5):
     """Non-streaming LLM call with fallback."""

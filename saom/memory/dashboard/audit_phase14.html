@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SAOM Audit Report — Phase 14</title>
+<style>
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 960px; margin: 2em auto; padding: 0 1em; background: #0d1117; color: #c9d1d9; line-height: 1.6; }
+h1 { color: #58a6ff; border-bottom: 2px solid #30363d; padding-bottom: .3em; }
+h2 { color: #79c0ff; margin-top: 2em; border-bottom: 1px solid #21262d; padding-bottom: .2em; }
+h3 { color: #8b949e; }
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; margin: 1em 0; }
+.stat-card { background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 16px; text-align: center; }
+.stat-value { font-size: 2em; font-weight: 700; color: #58a6ff; display: block; }
+.stat-label { font-size: .85em; color: #8b949e; margin-top: 4px; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: .78em; margin: 2px; }
+.badge-green { background: #1b3a2d; color: #3fb950; border: 1px solid #3fb950; }
+.badge-red { background: #3d1f1f; color: #f85149; border: 1px solid #f85149; }
+.badge-blue { background: #1f2d3d; color: #58a6ff; border: 1px solid #58a6ff; }
+.badge-yellow { background: #3d3520; color: #d29922; border: 1px solid #d29922; }
+table { width: 100%; border-collapse: collapse; margin: 1em 0; }
+th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #21262d; }
+th { color: #8b949e; font-weight: 600; }
+tr:hover td { background: #161b22; }
+.fix { background: #1b3a2d; border-left: 4px solid #3fb950; padding: 12px 16px; margin: 1em 0; border-radius: 6px; }
+.bug { background: #3d1f1f; border-left: 4px solid #f85149; padding: 12px 16px; margin: 1em 0; border-radius: 6px; }
+.gap { background: #3d3520; border-left: 4px solid #d29922; padding: 12px 16px; margin: 1em 0; border-radius: 6px; }
+.created { background: #0d2818; border-left: 4px solid #56d364; padding: 12px 16px; margin: 1em 0; border-radius: 6px; }
+pre { background: #161b22; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: .9em; border: 1px solid #30363d; }
+</style>
+</head>
+<body>
+<h1>SAOM Audit Report — Phase 14</h1>
+<p>Generated: 2026-07-10T10:04:29Z</p>
+
+<h2>System State</h2>
+<div class="stat-grid">
+<div class="stat-card"><span class="stat-value">9.3.0</span><span class="stat-label">Version</span></div>
+<div class="stat-card"><span class="stat-value">21</span><span class="stat-label">Tools</span></div>
+<div class="stat-card"><span class="stat-value">31</span><span class="stat-label">Skills</span></div>
+<div class="stat-card"><span class="stat-value">61</span><span class="stat-label">Graph Nodes</span></div>
+<div class="stat-card"><span class="stat-value">34</span><span class="stat-label">Graph Edges</span></div>
+<div class="stat-card"><span class="stat-value">24</span><span class="stat-label">Lessons</span></div>
+<div class="stat-card"><span class="stat-value">0</span><span class="stat-label">Vault Entries</span></div>
+<div class="stat-card"><span class="stat-value">13</span><span class="stat-label">Sessions</span></div>
+<div class="stat-card"><span class="stat-value">6/21</span><span class="stat-label">Tools Used</span></div>
+<div class="stat-card"><span class="stat-value">20%</span><span class="stat-label">Confidence</span></div>
+</div>
+
+<h2>Bugs Found &amp; Fixed</h2>
+
+<div class="bug">
+<strong>1. Stale last_session in init.json</strong><br>
+<code>init.json</code> had <code>last_session: "session-7"</code> — not updated after sessions 8-13.<br>
+<strong>Fix:</strong> Set to <code>"session-13"</code>
+</div>
+
+<div class="bug">
+<strong>2. Broken session timestamps (sessions 10-13)</strong><br>
+Sessions 10, 11, 12, 13 all had identical incorrect <code>started_at</code> timestamps due to copy-paste.<br>
+<strong>Fix:</strong> Corrected to: session 10 -> 2026-07-05, 11 -> 2026-07-07, 12 -> 2026-07-09, 13 -> 2026-07-10
+</div>
+
+<div class="bug">
+<strong>3. 3 malformed graph edges (missing target_id)</strong><br>
+<code>link_to_parent_tool()</code> in skill-crystallizer appended edges with <code>target_type</code> but no <code>target_id</code> — created 3 broken edges.<br>
+<strong>Fix:</strong> Deleted the 3 malformed edges. Updated <code>link_to_parent_tool()</code> to (a) include <code>target_id</code>, (b) check for duplicate edges before appending, (c) use proper edge schema.
+</div>
+
+<div class="bug">
+<strong>4. Graph node/edge counts out of sync</strong><br>
+<code>init.json</code> had stale counts (61 nodes, 30 edges). Actual was 61 nodes, 34 edges.<br>
+<strong>Fix:</strong> Synced <code>init.json</code> counts to match actual data.
+</div>
+
+<h2>Gaps Found &amp; Filled</h2>
+
+<div class="gap">
+<strong>A. No session-level file tracker</strong><br>
+No system tracked which files were created or deleted per session. File provenance was invisible.<br>
+<strong>Fix:</strong> Created <code>session-files</code> tool with <code>record</code> and <code>summary</code> modes.
+</div>
+
+<div class="gap">
+<strong>B. No secret/key vault</strong><br>
+API keys, tokens, and passwords had no structured storage.<br>
+<strong>Fix:</strong> Created <code>vault</code> tool with <code>set/get/list/delete</code>. Values masked on display.
+</div>
+
+<div class="gap">
+<strong>C. No self-awareness introspection</strong><br>
+No single command answered "what do I have?" — required reading 4+ files.<br>
+<strong>Fix:</strong> Created <code>status</code> tool: 7 data sources into one compact JSON.
+</div>
+
+<div class="gap">
+<strong>D. 5 empty dead directories + 0-byte file</strong><br>
+designs/, mental_models/, pipelines/, reference/, research/ — all empty. forager/log.jsonl (0 bytes). forager/tests/ (empty).<br>
+<strong>Fix:</strong> Deleted all.
+</div>
+
+<div class="gap">
+<strong>E. 15+ low-value lessons</strong><br>
+Of 24 lessons, ~15 are auto-generated garbage ("test summary") that degrade retrieval quality.<br>
+<strong>Status:</strong> Identified. Needs human review before pruning.
+</div>
+
+<h2>New Artifacts Created</h2>
+
+<div class="created">
+<strong>1. session-files/tool.py + tool.json</strong><br>
+Records files created/deleted per session. <code>record &lt;session_id&gt; create|delete &lt;path&gt;</code>, <code>summary [session_id]</code>.
+</div>
+
+<div class="created">
+<strong>2. vault/tool.py + tool.json + vault/vault.json</strong><br>
+Structured vault for secrets. Values masked first 4 + last 4 chars. <code>set/get/list/delete</code>.
+</div>
+
+<div class="created">
+<strong>3. status/tool.py + tool.json</strong><br>
+Self-awareness summary. Reads 7 data sources, returns compact JSON in 50 lines.
+</div>
+
+<div class="created">
+<strong>4. skill-crystallizer dedup fix</strong><br>
+<code>link_to_parent_tool()</code> rewritten with duplicate edge detection and proper edge schema.
+</div>
+
+<h2>Tool Inventory (21 total)</h2>
+<table>
+<tr><th>Name</th><th>Phases</th><th>Modes</th><th>Used</th></tr>
+<tr><td>confidence</td><td>pre</td><td>auto</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>consolidate</td><td>post</td><td>auto</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>continuity</td><td>pre, post</td><td>auto</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>curriculum</td><td>pre</td><td>auto</td><td><span class="badge badge-green">used</span></td></tr>
+<tr><td>failure-predict</td><td>pre</td><td>auto</td><td><span class="badge badge-green">used</span></td></tr>
+<tr><td>failure-query</td><td>pre</td><td>auto</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>graph-query</td><td>pre, post</td><td>manual</td><td><span class="badge badge-green">used</span></td></tr>
+<tr><td>immune</td><td>pre</td><td>auto</td><td><span class="badge badge-green">used</span></td></tr>
+<tr><td>lesson-extractor</td><td>post</td><td>auto</td><td><span class="badge badge-green">used</span></td></tr>
+<tr><td>plasticity</td><td>post</td><td>auto</td><td><span class="badge badge-green">used</span></td></tr>
+<tr><td>preference</td><td>post</td><td>auto</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>saom-health</td><td>pre, post</td><td>manual</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>self-modify</td><td>post</td><td>manual</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>session-files</td><td>post</td><td>auto, manual</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>skill-crystallizer</td><td>post</td><td>manual</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>skill-tracker</td><td>post</td><td>auto</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>status</td><td>pre</td><td>auto, manual</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>task-decomposer</td><td>pre</td><td>manual</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>tool-weaver</td><td>pre, post</td><td>manual</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>vault</td><td>pre, post</td><td>manual</td><td><span class="badge badge-red">unused</span></td></tr>
+<tr><td>web-forager</td><td>pre</td><td>auto</td><td><span class="badge badge-red">unused</span></td></tr>
+
+</table>
+
+<h2>Graph Structure</h2>
+<table>
+<tr><th>Metric</th><th>Value</th></tr>
+<tr><td>Total Nodes</td><td>61</td></tr>
+<tr><td>Total Edges</td><td>34</td></tr>
+</table>
+
+<h3>Edge Distribution</h3>
+<table>
+<tr><th>Relationship</th><th>Count</th></tr>
+<tr><td>uses</td><td>10</td></tr>
+<tr><td>followed_by</td><td>9</td></tr>
+<tr><td>related_to</td><td>6</td></tr>
+<tr><td>produces</td><td>5</td></tr>
+<tr><td>contradicts</td><td>1</td></tr>
+<tr><td>abstracts_from</td><td>1</td></tr>
+<tr><td>reinforces</td><td>1</td></tr>
+<tr><td>caused</td><td>1</td></tr>
+
+</table>
+
+<h2>Skills Overview (31 total)</h2>
+<table>
+<tr><th>Source</th><th>Count</th></tr>
+<tr><td>initial</td><td>16</td></tr>
+<tr><td>community-port</td><td>7</td></tr>
+<tr><td>auto-generated</td><td>3</td></tr>
+<tr><td>unknown</td><td>3</td></tr>
+<tr><td>evolved</td><td>2</td></tr>
+
+</table>
+
+<h2>Recommendations</h2>
+<ol>
+<li><strong>Prune garbage lessons</strong> — Remove ~15 low-value lessons from lessons.jsonl.</li>
+<li><strong>Add dispatch unit tests</strong> — Tool matching, phase routing, edge cases.</li>
+<li><strong>Next evolution cycle</strong> — Automated lesson quality scoring, graph visualization, confidence calibration.</li>
+</ol>
+
+<h2>Memory Directory Structure</h2>
+<pre>
+memory/
+  bridge/          - bridge.py (900 lines), pulse.py, self.json, preferences.json, learn.py
+  dashboard/       - audit_phase14.html
+  graph/           - nodes.json (61), edges.json (34)
+  knowledge/       - (empty)
+  lessons/         - lessons.jsonl (24 entries)
+  rules/           - auto_rules.json
+  sessions/        - session-4, 7-13 (6 missing)
+  skills/          - registry.json (27 + 3 evolved + 3 crystallized = 31)
+  tools/           - 21 tool directories with tool.py + tool.json
+  vault/           - vault.json
+  working/         - working files
+  init.json        - config v9.3.0
+</pre>
+
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "vault",
+  "version": "1.0.0",
+  "description": "Secure vault for API keys, tokens, passwords, important links. Values masked on display. Operations: set, get (masked), list, delete.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "created_at": "2026-07-10T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": ["vault", "secret", "key", "token", "password", "api", "credential", "store"],
+    "phases": ["pre", "post"],
+    "modes": ["manual"],
+    "dispatch_args": {
+      "mode": "list",
+      "map": {
+        "task": "category"
+      }
+    }
+  }
+}

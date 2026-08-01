@@ -1,0 +1,16 @@
+{
+  "severity": 2,
+  "patterns": [
+    {
+      "type": "repeat_error",
+      "detail": "",
+      "count": 10
+    },
+    {
+      "type": "domain_weakness",
+      "detail": "unknown",
+      "count": 10
+    }
+  ],
+  "timestamp": "2026-07-10T10:28:43.935643"
+}

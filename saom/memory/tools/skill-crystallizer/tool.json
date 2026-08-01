@@ -1,0 +1,76 @@
+{
+  "name": "skill-crystallizer",
+  "version": "1.0.0",
+  "description": "Crystallizes reusable patterns into SKILL.md files without writing code. Safer, more composable than tool-weaver. Modes: crystallize, list, view, prune, compose.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "mode",
+      "type": "string",
+      "description": "Mode: crystallize, list, view, prune, compose"
+    },
+    {
+      "name": "name",
+      "type": "string",
+      "description": "Skill name (kebab-case, used as directory name)"
+    },
+    {
+      "name": "description",
+      "type": "string",
+      "description": "Brief description of what the skill does"
+    },
+    {
+      "name": "steps",
+      "type": "string",
+      "description": "Multi-line numbered instructions for the skill"
+    },
+    {
+      "name": "trigger_description",
+      "type": "string",
+      "description": "Keywords/phrases that should auto-load this skill"
+    },
+    {
+      "name": "dependencies",
+      "type": "string",
+      "description": "Comma-separated skill names this depends on"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "json",
+      "description": "Result with skill_path, registration status, graph_node_id"
+    }
+  ],
+  "dependencies": [
+    "json",
+    "os",
+    "datetime",
+    "re"
+  ],
+  "created_at": "2026-07-10T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "crystallize",
+      "skill",
+      "pattern",
+      "reusable",
+      "save pattern",
+      "capture",
+      "compose",
+      "crystallization"
+    ],
+    "phases": ["post"],
+    "modes": ["manual"],
+    "dispatch_args": {
+      "mode": "crystallize",
+      "map": {
+        "task": "steps"
+      }
+    }
+  }
+}

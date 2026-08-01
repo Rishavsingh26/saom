@@ -1,0 +1,56 @@
+{
+  "name": "continuity",
+  "version": "1.0.0",
+  "description": "Session continuity engine. 'start' mode reads last 2 sessions + last 5 lessons for context injection. 'end' mode writes structured session summary, flushes pending writes, updates last.json.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "mode",
+      "type": "string",
+      "description": "'start' to get cross-session context, 'end' to finalize current session"
+    },
+    {
+      "name": "session_data",
+      "type": "json",
+      "description": "For mode=end: {\"session_id\": int, \"summary\": str, \"tasks\": [str], \"skills_used\": [str], \"lessons_extracted\": [str], \"issues\": [str]}"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "json",
+      "description": "Context blob for 'start', or session summary + graph update for 'end'"
+    }
+  ],
+  "dependencies": [
+    "json"
+  ],
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "session",
+      "continuity",
+      "context",
+      "memory",
+      "persist",
+      "resume"
+    ],
+    "phases": [
+      "pre",
+      "post"
+    ],
+    "modes": [
+      "auto"
+    ],
+    "dispatch_args": {
+      "mode": "start",
+      "map": {
+        "task": "session_data"
+      }
+    }
+  }
+}

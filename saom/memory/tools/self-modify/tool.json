@@ -1,0 +1,56 @@
+{
+  "name": "self-modify",
+  "version": "1.0.0",
+  "description": "Proposes and applies patches to SAOM's own sub-skills and SKILL.md based on recurring failure patterns. Archives originals for rollback. User approval required before any modification.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "mode",
+      "type": "string",
+      "description": "'propose' to scan failures and generate patches, 'apply' to apply a proposal, 'rollback' to undo a modification, 'history' to list past modifications"
+    },
+    {
+      "name": "proposal_id",
+      "type": "integer",
+      "description": "Proposal ID from propose output (for mode=apply)"
+    },
+    {
+      "name": "target_file",
+      "type": "string",
+      "description": "File path (for mode=rollback: which file to restore)"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "json",
+      "description": "Proposals, apply confirmation, or history"
+    }
+  ],
+  "dependencies": [
+    "json",
+    "shutil"
+  ],
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "modify",
+      "patch",
+      "update",
+      "change",
+      "rewrite",
+      "self-improve",
+      "evolution"
+    ],
+    "phases": [
+      "post"
+    ],
+    "modes": [
+      "manual"
+    ]
+  }
+}

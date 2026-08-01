@@ -1,0 +1,50 @@
+{
+  "name": "consolidate",
+  "version": "1.0.0",
+  "description": "Batch consolidation: finds related lessons (5+ with similar keywords), merges them into a reusable skill. Prints proposal for user approval before writing.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "mode",
+      "type": "string",
+      "description": "'scan' to find consolidation candidates, 'apply' to write a specific proposal"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "proposals",
+      "type": "json",
+      "description": "List of consolidation proposals with candidate lessons and generated skill"
+    }
+  ],
+  "dependencies": [
+    "json"
+  ],
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "consolidate",
+      "merge",
+      "dedup",
+      "prune",
+      "compress",
+      "compress"
+    ],
+    "phases": [
+      "post"
+    ],
+    "modes": [
+      "auto"
+    ],
+    "dispatch_args": {
+      "mode": "scan",
+      "map": {
+        "task": "task_description"
+      }
+    }
+  }
+}

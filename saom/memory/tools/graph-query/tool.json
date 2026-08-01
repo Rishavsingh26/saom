@@ -1,0 +1,52 @@
+{
+  "name": "graph-query",
+  "version": "1.0.0",
+  "description": "Query the SAOM knowledge graph. Supports Q1-Q5 query patterns: find nodes, traverse edges, compute skill gaps.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "query_type",
+      "type": "string",
+      "description": "Query type: q1 (find last attempt), q2 (related skills), q3 (failure patterns), q4 (skill performance), q5 (skill gaps)"
+    },
+    {
+      "name": "query_param",
+      "type": "string",
+      "description": "Search term, node label, or domain name depending on query type"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "results",
+      "type": "json",
+      "description": "Query results as JSON array"
+    }
+  ],
+  "dependencies": [
+    "json"
+  ],
+  "created_at": "2026-07-05T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "graph",
+      "query",
+      "search",
+      "find",
+      "relationship",
+      "node",
+      "edge",
+      "traverse"
+    ],
+    "phases": [
+      "pre",
+      "post"
+    ],
+    "modes": [
+      "manual"
+    ]
+  }
+}

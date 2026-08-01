@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SAOM Dashboard</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>SAOM Dashboard</h1>
+    <div id="status-bar">
+      <span id="status-dot" class="dot stopped"></span>
+      <span id="status-text">Ready</span>
+    </div>
+    <div id="header-actions">
+      <button onclick="doAction('init')" class="btn btn-small btn-warning">Init</button>
+      <button onclick="doAction('status')" class="btn btn-small btn-info">Status</button>
+      <button onclick="doAction('pulse-start')" class="btn btn-small btn-success">Start</button>
+      <button onclick="doAction('pulse-end')" class="btn btn-small btn-danger">End</button>
+    </div>
+  </header>
+  <div id="main">
+    <div id="sidebar">
+      <h3>System</h3>
+      <div id="sys-info">Loading...</div>
+      <h3>Memory</h3>
+      <div id="mem-info">--</div>
+      <h3>Tools</h3>
+      <div id="tool-count">--</div>
+      <h3>Quick Actions</h3>
+      <div id="quick-actions">
+        <button onclick="quickPre()" class="btn btn-small">Pre-check</button>
+        <button onclick="quickPost()" class="btn btn-small">Post</button>
+        <button onclick="quickPulse()" class="btn btn-small">Pulse</button>
+      </div>
+      <h3>Commands</h3>
+      <div id="cmd-list">
+        <div class="cmd-item" onclick="insertCmd('status')">status</div>
+        <div class="cmd-item" onclick="insertCmd('pulse start')">pulse start</div>
+        <div class="cmd-item" onclick="insertCmd('pulse end')">pulse end</div>
+        <div class="cmd-item" onclick="insertCmd('pre ')">pre &lt;task&gt;</div>
+        <div class="cmd-item" onclick="insertCmd('post ')">post &lt;summary&gt;</div>
+        <div class="cmd-item" onclick="insertCmd('init')">init</div>
+        <div class="cmd-item" onclick="insertCmd('search ')">search &lt;query&gt;</div>
+        <div class="cmd-item" onclick="insertCmd('fetch ')">fetch &lt;url&gt;</div>
+        <div class="cmd-item" onclick="insertCmd('read ')">read &lt;file&gt;</div>
+        <div class="cmd-item" onclick="insertCmd('write ')">write &lt;file&gt;</div>
+        <div class="cmd-item" onclick="insertCmd('python ')}">python &lt;code&gt;</div>
+        <div class="cmd-item" onclick="insertCmd('shell ')}">shell &lt;cmd&gt;</div>
+      </div>
+      <h3>Skills</h3>
+      <div id="skills-list">Loading...</div>
+    </div>
+    <div id="chat-area">
+      <div id="chat-messages">
+        <div class="msg assistant">
+          <div class="msg-label">SAOM</div>
+          <div class="msg-body">Hey! I'm SAOM v11.0.0 - your self-improving AI assistant.
+
+I can:
+  Chat with AI (with memory)
+  search <query> - Web search (DuckDuckGo)
+  fetch <url> - Read webpage content
+  Read/write/edit files
+  Run Python code & shell commands
+  Execute SAOM tools & skills
+
+Type a command or ask me anything!</div>
+        </div>
+      </div>
+      <div id="chat-input-area">
+        <textarea id="chat-input" rows="1" placeholder="Type message... (Enter to send, Shift+Enter for new line)" onkeydown="handleKey(event)"></textarea>
+        <button onclick="sendChat()" class="btn btn-primary">Send</button>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <span>SAOM v11.0.0 | Session: <span id="session-id">default</span></span>
+    <span id="footer-time"></span>
+  </footer>
+</div>
+<script>
+const API = '';
+const SESSION_ID = 'sess_' + Date.now();
+let isWorking = false;
+
+function ts() { return new Date().toLocaleTimeString(); }
+
+function setStatus(state, text) {
+  var dot = document.getElementById('status-dot');
+  var txt = document.getElementById('status-text');
+  dot.className = 'dot ' + state;
+  txt.textContent = text;
+  isWorking = (state === 'working');
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendChat();
+  }
+}
+
+function addMsg(role, text) {
+  var m = document.createElement('div');
+  m.className = 'msg ' + role;
+  var header = document.createElement('div');
+  header.className = 'msg-header';
+  var label = document.createElement('div');
+  label.className = 'msg-label';
+  label.textContent = role === 'user' ? 'You' : 'SAOM';
+  header.appendChild(label);
+  var copyBtn = document.createElement('button');
+  copyBtn.className = 'copy-btn';
+  copyBtn.textContent = 'Copy';
+  copyBtn.onclick = function() { copyText(text, this); };
+  header.appendChild(copyBtn);
+  m.appendChild(header);
+  var body = document.createElement('div');
+  body.className = 'msg-body';
+  body.innerHTML = formatMessage(text);
+  m.appendChild(body);
+  document.getElementById('chat-messages').appendChild(m);
+  scrollBottom();
+  return m;
+}
+
+function formatMessage(text) {
+  // Escape HTML first
+  var escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // Code blocks: ```lang\ncode\n```
+  escaped = escaped.replace(/```(\w*)\n([\s\S]*?)```/g, function(match, lang, code) {
+    return '<div class="code-block"><div class="code-lang">' + (lang || 'code') + '</div><pre><code>' + code.trim() + '</code></pre></div>';
+  });
+  // Inline code: `code`
+  escaped = escaped.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+  // Bold: **text**
+  escaped = escaped.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Italic: *text*
+  escaped = escaped.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  // Links: [text](url)
+  escaped = escaped.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+  // Bullet points
+  escaped = escaped.replace(/^[-*] (.+)$/gm, '<div class="bullet">$1</div>');
+  // Numbered lists
+  escaped = escaped.replace(/^(\d+)\. (.+)$/gm, '<div class="bullet">$1. $2</div>');
+  return escaped;
+}
+
+function copyText(text, btn) {
+  navigator.clipboard.writeText(text).then(function() {
+    btn.textContent = 'Copied!';
+    btn.className = 'copy-btn copied';
+    setTimeout(function() { btn.textContent = 'Copy'; btn.className = 'copy-btn'; }, 2000);
+  });
+}
+
+function showTyping() {
+  var m = document.createElement('div');
+  m.className = 'msg assistant typing-msg';
+  m.id = 'typing-indicator';
+  m.innerHTML = '<div class="msg-label">SAOM</div><div class="msg-body"><div class="typing-dots"><span></span><span></span><span></span></div></div>';
+  document.getElementById('chat-messages').appendChild(m);
+  scrollBottom();
+}
+
+function removeTyping() {
+  var el = document.getElementById('typing-indicator');
+  if (el) el.remove();
+}
+
+function scrollBottom() {
+  var c = document.getElementById('chat-messages');
+  c.scrollTop = c.scrollHeight;
+}
+
+function insertCmd(cmd) {
+  var el = document.getElementById('chat-input');
+  el.value = cmd;
+  el.focus();
+}
+
+function updateSidebar(data) {
+  if (!data || !data.version) return;
+  document.getElementById('sys-info').innerHTML =
+    'v' + data.version + '<br>Mode: ' + (data.current_mode || 'idle') + '<br>Confidence: ' + (data.current_confidence || 50) + '%<br>Session: ' + (data.current_session || 'none');
+  document.getElementById('mem-info').innerHTML =
+    'Graph: ' + (data.graph_nodes || 0) + ' nodes<br>Lessons: ' + (data.lessons_total || 0) + '<br>Sessions: ' + (data.sessions || 0);
+  var used = (data.tools || []).filter(function(t) { return t.used; });
+  document.getElementById('tool-count').innerHTML =
+    (data.tools_used || 0) + '/' + (data.tools_total || 0) + ' used' +
+    (used.length > 0 ? '<br>Active: ' + used.map(function(t) { return t.name; }).join(', ') : '');
+}
+
+async function loadStatus() {
+  try {
+    var r = await fetch(API + '/api/status').then(function(res) { return res.json(); });
+    updateSidebar(r);
+  } catch(e) {}
+}
+
+async function loadSkills() {
+  try {
+    var r = await fetch(API + '/api/skills').then(function(res) { return res.json(); });
+    var el = document.getElementById('skills-list');
+    if (r.skills && r.skills.length > 0) {
+      el.innerHTML = r.skills.slice(0, 8).map(function(s) {
+        return '<div class="cmd-item">' + s.name + '</div>';
+      }).join('');
+    } else {
+      el.innerHTML = 'None found';
+    }
+  } catch(e) {
+    document.getElementById('skills-list').innerHTML = 'Error';
+  }
+}
+
+async function doAction(action) {
+  addMsg('user', action);
+  setStatus('working', 'Working...');
+  showTyping();
+  try {
+    var r;
+    if (action === 'init') {
+      r = await fetch(API + '/api/init', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'}).then(function(res) { return res.json(); });
+    } else if (action === 'status') {
+      r = await fetch(API + '/api/status').then(function(res) { return res.json(); });
+      removeTyping();
+      updateSidebar(r);
+      addMsg('assistant', 'v' + r.version + ' | Mode: ' + (r.current_mode || 'idle') + ' | Confidence: ' + (r.current_confidence || 50) + '% | Tools: ' + (r.tools_used || 0) + '/' + (r.tools_total || 0));
+      setStatus('ready', 'Ready');
+      return;
+    } else if (action === 'pulse-start') {
+      r = await fetch(API + '/api/pulse/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'}).then(function(res) { return res.json(); });
+    } else if (action === 'pulse-end') {
+      r = await fetch(API + '/api/pulse/end', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'}).then(function(res) { return res.json(); });
+    } else if (action === 'quickPre') {
+      var t = prompt('Task:'); if(!t) { removeTyping(); setStatus('ready', 'Ready'); return; }
+      r = await fetch(API + '/api/pre', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({task: t})}).then(function(res) { return res.json(); });
+    } else if (action === 'quickPost') {
+      var s = prompt('Summary:') || 'quick post';
+      r = await fetch(API + '/api/post', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({summary: s, outcome: 'success'})}).then(function(res) { return res.json(); });
+    } else if (action === 'quickPulse') {
+      r = await fetch(API + '/api/pulse/status', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: '{}'}).then(function(res) { return res.json(); });
+    } else { removeTyping(); setStatus('ready', 'Ready'); return; }
+    removeTyping();
+    addMsg('assistant', r.response || JSON.stringify(r));
+    setStatus('ready', 'Ready');
+  } catch(e) { removeTyping(); addMsg('assistant', 'Error: ' + e.message); setStatus('error', 'Error'); }
+}
+
+function quickPre() { doAction('quickPre'); }
+function quickPost() { doAction('quickPost'); }
+function quickPulse() { doAction('quickPulse'); }
+
+async function sendChat() {
+  var input = document.getElementById('chat-input');
+  var msg = input.value.trim();
+  if (!msg || isWorking) return;
+  input.value = '';
+  input.style.height = 'auto';
+  addMsg('user', msg);
+  setStatus('working', 'Thinking...');
+  showTyping();
+
+  var lower = msg.toLowerCase();
+  if (lower.startsWith('read ') || lower.startsWith('write ') || lower.startsWith('shell ') || lower.startsWith('python ') || lower.startsWith('run ')) {
+    try {
+      var r = await fetch(API + '/api/chat', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: msg, session_id: SESSION_ID})}).then(function(res) { return res.json(); });
+      removeTyping();
+      addMsg('assistant', r.response || 'No output');
+      setStatus('ready', 'Ready');
+    } catch(e) { removeTyping(); addMsg('assistant', 'Error: ' + e.message); setStatus('error', 'Error'); }
+    return;
+  }
+
+  var msgEl = null;
+  var bodyEl = null;
+  try {
+    var resp = await fetch(API + '/api/chat/stream', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({message: msg, session_id: SESSION_ID})});
+    var reader = resp.body.getReader();
+    var decoder = new TextDecoder();
+    var started = false;
+    while (true) {
+      var {done, value} = await reader.read();
+      if (done) break;
+      var text = decoder.decode(value);
+      var lines = text.split('\n');
+      for (var line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        try {
+          var chunk = JSON.parse(line.slice(6));
+          if (!started) {
+            removeTyping();
+            msgEl = addMsg('assistant', '');
+            bodyEl = msgEl.querySelector('.msg-body');
+            started = true;
+            setStatus('working', 'Generating...');
+          }
+          if (chunk.tool_status) {
+            var existing = document.getElementById('tool-status');
+            if (existing) existing.remove();
+            var ts = document.createElement('div');
+            ts.id = 'tool-status';
+            ts.className = 'tool-status';
+            ts.innerHTML = '<span class="tool-spinner"></span> ' + chunk.tool_status;
+            document.getElementById('chat-messages').appendChild(ts);
+            scrollBottom();
+          }
+          if (chunk.chunk) {
+            var existing2 = document.getElementById('tool-status');
+            if (existing2) existing2.remove();
+            bodyEl.textContent += chunk.chunk;
+            scrollBottom();
+          }
+          if (chunk.done && chunk.full) {
+            bodyEl.textContent = chunk.full;
+            scrollBottom();
+          }
+        } catch(e) {}
+      }
+    }
+    if (!started) { removeTyping(); addMsg('assistant', 'No response'); }
+    setStatus('ready', 'Ready');
+  } catch(e) {
+    removeTyping();
+    addMsg('assistant', 'Error: ' + e.message);
+    setStatus('error', 'Error');
+  }
+}
+
+document.getElementById('chat-input').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+});
+
+document.getElementById('session-id').textContent = SESSION_ID;
+setInterval(function() { document.getElementById('footer-time').textContent = new Date().toISOString(); }, 1000);
+loadStatus();
+loadSkills();
+setInterval(loadStatus, 30000);
+</script>
+</body>
+</html>

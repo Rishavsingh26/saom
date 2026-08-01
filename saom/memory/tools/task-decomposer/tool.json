@@ -1,0 +1,58 @@
+{
+  "name": "task-decomposer",
+  "version": "1.0.0",
+  "description": "AutoGPT-style recursive goal decomposition. Breaks high-level goals into sub-tasks, maps each to matching SAOM tools via dispatch, outputs a structured dependency plan. Modes: decompose, plan, trace.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "mode",
+      "type": "string",
+      "description": "Mode: decompose, plan, trace"
+    },
+    {
+      "name": "goal",
+      "type": "string",
+      "description": "High-level goal to decompose"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "json",
+      "description": "Decomposed plan with sub-tasks, tool mappings, dependencies, and execution order"
+    }
+  ],
+  "dependencies": [
+    "json",
+    "os",
+    "re",
+    "itertools"
+  ],
+  "created_at": "2026-07-10T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "decompose",
+      "plan",
+      "subtask",
+      "break down",
+      "multi-step",
+      "complex",
+      "goal",
+      "hierarchical",
+      "recursive",
+      "decomposition"
+    ],
+    "phases": ["pre"],
+    "modes": ["manual"],
+    "dispatch_args": {
+      "mode": "decompose",
+      "map": {
+        "task": "goal"
+      }
+    }
+  }
+}

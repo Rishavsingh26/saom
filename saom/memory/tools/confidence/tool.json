@@ -1,0 +1,65 @@
+{
+  "name": "confidence",
+  "version": "1.0.0",
+  "description": "Computes confidence score (0-100%) for a task based on graph memory, historical outcomes, and trajectory features. Also manages calibration data (predicted vs actual) over time.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "mode",
+      "type": "string",
+      "description": "'score' to compute confidence, 'record' to log a prediction+outcome pair, 'stats' to view calibration data"
+    },
+    {
+      "name": "task_description",
+      "type": "string",
+      "description": "The task description (for mode=score)"
+    },
+    {
+      "name": "trajectory_features",
+      "type": "json",
+      "description": "Optional: {\"dead_ends\": int, \"re_reads\": int, \"re_fetches\": int}"
+    },
+    {
+      "name": "outcome_data",
+      "type": "json",
+      "description": "For mode=record: {\"predicted\": float, \"actual\": float (0 or 1)}"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "json",
+      "description": "Confidence score with reasoning, or calibration stats"
+    }
+  ],
+  "dependencies": [
+    "json",
+    "re"
+  ],
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "confidence",
+      "score",
+      "risk",
+      "assessment",
+      "reliability"
+    ],
+    "phases": [
+      "pre"
+    ],
+    "modes": [
+      "auto"
+    ],
+    "dispatch_args": {
+      "mode": "score",
+      "map": {
+        "task": "task_description"
+      }
+    }
+  }
+}

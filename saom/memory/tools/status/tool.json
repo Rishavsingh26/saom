@@ -1,0 +1,19 @@
+{
+  "name": "status",
+  "version": "1.0.0",
+  "description": "One-shot self-awareness summary. Reads all registry + init + graph + lessons + vault into compact JSON. Know thyself in 50 lines.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "created_at": "2026-07-10T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": ["status", "summary", "self", "awareness", "what can you do", "capabilities", "introspect", "overview", "dashboard"],
+    "phases": ["pre"],
+    "modes": ["auto", "manual"],
+    "dispatch_args": {
+      "mode": "status"
+    }
+  }
+}

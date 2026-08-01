@@ -1,0 +1,36 @@
+{
+  "name": "plasticity",
+  "version": "1.0.0",
+  "description": "Dynamic edge weight manager. Strengthens connections on successful use, weakens on failure, applies decay over time. Implements Hebbian-like learning for the graph.",
+  "language": "python",
+  "entrypoint": "memory/tools/plasticity/tool.py",
+  "commands": {
+    "strengthen": "+0.1 to matching edge weight (cap 1.0). Usage: strengthen <source_id> <target_id> [edge_type]",
+    "weaken": "-0.2 to matching edge weight (floor 0.0). Usage: weaken <source_id> <target_id> [edge_type]",
+    "strengthen-type": "+0.1 to all edges matching source_type->target_type. Usage: strengthen-type <source_type> <target_type> [edge_type] [amount]",
+    "weaken-type": "-0.2 to all edges matching source_type->target_type. Usage: weaken-type <source_type> <target_type> [edge_type] [amount]",
+    "decay": "Apply time-based decay to edges untouched for 14+ days. weight *= (1-0.05)^cycles",
+    "status": "Show edge weight distribution, weakest/strongest edges, by-type averages."
+  },
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "plasticity",
+      "strengthen",
+      "weaken",
+      "decay",
+      "edge",
+      "weight",
+      "connection"
+    ],
+    "phases": [
+      "post"
+    ],
+    "modes": [
+      "auto"
+    ]
+  }
+}

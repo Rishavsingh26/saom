@@ -1,0 +1,30 @@
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.egg-info/
+dist/
+build/
+.DS_Store
+Thumbs.db
+
+# SAOM memory — runtime data files only
+# (Python source files in these dirs ARE tracked)
+saom/memory/init.json
+saom/memory/bridge/self.json
+saom/memory/bridge/preferences.json
+saom/memory/bridge/circuit_breaker.json
+saom/memory/bridge/prm_scores.jsonl
+saom/memory/graph/
+saom/memory/lessons/
+saom/memory/rules/
+saom/memory/sessions/
+saom/memory/skills/registry.json
+saom/memory/skills/foraged.json
+saom/memory/vault/
+saom/memory/working/
+saom/memory/knowledge/
+saom/memory/tools/confidence/calibration.json
+saom/memory/tools/confidence/last_score.txt
+saom/memory/tools/curriculum/plan.json
+saom/memory/tools/immune/antibodies.json

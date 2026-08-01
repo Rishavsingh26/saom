@@ -1,0 +1,54 @@
+{
+  "name": "tool-weaver",
+  "version": "1.0.0",
+  "description": "Autonomous tool generator. Takes a tool specification (name, description, params, logic code), scaffolds tool.py + tool.json, validates syntax, installs to memory/tools/, and registers in registry/init/graph. Like Voyager's skill codex but for Python.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "mode",
+      "type": "string",
+      "description": "'generate' to create a new tool, 'patch' to update an existing tool"
+    },
+    {
+      "name": "spec",
+      "type": "json",
+      "description": "Tool specification JSON. See --help for schema."
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "json",
+      "description": "Creation result with paths, validation status, registry update"
+    }
+  ],
+  "dependencies": [
+    "json",
+    "os",
+    "sys",
+    "datetime"
+  ],
+  "created_at": "2026-07-09T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "generate",
+      "create",
+      "weave",
+      "tool",
+      "scaffold",
+      "new tool",
+      "generate tool"
+    ],
+    "phases": [
+      "pre",
+      "post"
+    ],
+    "modes": [
+      "manual"
+    ]
+  }
+}

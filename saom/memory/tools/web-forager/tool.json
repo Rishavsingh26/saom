@@ -1,0 +1,71 @@
+{
+  "name": "web-forager",
+  "version": "1.0.0",
+  "description": "Live web discovery tool. Formulates search queries, fetches results via DuckDuckGo lite, evaluates relevance, creates knowledge notes, and updates the graph. Falls back to search-plan mode if network is unavailable.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "mode",
+      "type": "string",
+      "description": "'discover' to search and store, 'search-plan' to output queries for assistant, 'ingest' to store pre-fetched results"
+    },
+    {
+      "name": "query",
+      "type": "string",
+      "description": "The search topic/question"
+    },
+    {
+      "name": "domain",
+      "type": "string",
+      "description": "Domain context (e.g., 'agent-self-improvement', 'tool-discovery')"
+    },
+    {
+      "name": "results",
+      "type": "json",
+      "description": "Pre-fetched results for mode=ingest: [{title, url, snippet}]"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "json",
+      "description": "Findings with knowledge note path, graph node ID, and top results"
+    }
+  ],
+  "dependencies": [
+    "json",
+    "os",
+    "sys",
+    "datetime",
+    "urllib"
+  ],
+  "created_at": "2026-07-10T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "web",
+      "search",
+      "research",
+      "find",
+      "discover",
+      "lookup",
+      "internet",
+      "current"
+    ],
+    "phases": [
+      "pre"
+    ],
+    "modes": [
+      "auto"
+    ],
+    "dispatch_args": {
+      "mode": "discover",
+      "map": {
+        "task": "query"
+      }
+    }
+  }
+}

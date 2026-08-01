@@ -1,0 +1,50 @@
+{
+  "name": "failure-query",
+  "version": "1.0.0",
+  "description": "Pre-task guardrail: query graph + lessons for known failure patterns matching this task. Returns warnings if similar tasks failed before, with root cause and fix.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "task_description",
+      "type": "string",
+      "description": "The task description to check for known failure patterns"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "guardrail",
+      "type": "json",
+      "description": "Guardrail message with known failures (if any) or all-clear signal"
+    }
+  ],
+  "dependencies": [
+    "json",
+    "re"
+  ],
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "failure",
+      "past",
+      "lesson",
+      "mistake",
+      "guardrail",
+      "recurring"
+    ],
+    "phases": [
+      "pre"
+    ],
+    "modes": [
+      "auto"
+    ],
+    "dispatch_args": {
+      "map": {
+        "task": "task_description"
+      }
+    }
+  }
+}

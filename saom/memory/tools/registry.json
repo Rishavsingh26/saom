@@ -1,0 +1,692 @@
+{
+  "tools": [
+    {
+      "name": "continuity",
+      "version": "1.0.0",
+      "description": "Session continuity engine: 'start' injects last 2 sessions + 5 lessons into context. 'end' writes structured summary, flushes graph, updates last.json.",
+      "language": "python",
+      "entrypoint": "memory/tools/continuity/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "session",
+          "continuity",
+          "context",
+          "memory",
+          "persist",
+          "resume"
+        ],
+        "phases": [
+          "pre",
+          "post"
+        ],
+        "modes": [
+          "auto"
+        ],
+        "dispatch_args": {
+          "mode": "start",
+          "map": {
+            "task": "session_data"
+          }
+        }
+      }
+    },
+    {
+      "name": "self-modify",
+      "version": "1.0.0",
+      "description": "Proposes and applies patches to SAOM's own sub-skills/SKILL.md based on recurring failure patterns. Archives originals. User approval required.",
+      "language": "python",
+      "entrypoint": "memory/tools/self-modify/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "modify",
+          "patch",
+          "update",
+          "change",
+          "rewrite",
+          "self-improve",
+          "evolution"
+        ],
+        "phases": [
+          "post"
+        ],
+        "modes": [
+          "manual"
+        ]
+      }
+    },
+    {
+      "name": "skill-tracker",
+      "version": "1.0.0",
+      "description": "Records skill usage and outcome. Updates registry with use_count, success_count, last_used, avg_confidence. Prune-scan flags low-success skills.",
+      "language": "python",
+      "entrypoint": "memory/tools/skill-tracker/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "skill",
+          "track",
+          "use",
+          "count",
+          "prune",
+          "registry",
+          "usage"
+        ],
+        "phases": [
+          "post"
+        ],
+        "modes": [
+          "auto"
+        ],
+        "dispatch_args": {
+          "mode": "search",
+          "map": {
+            "task": "skill_name"
+          }
+        }
+      }
+    },
+    {
+      "name": "confidence",
+      "version": "1.0.0",
+      "description": "Computes confidence score (0-100%) from graph memory + trajectory features. Manages calibration data.",
+      "language": "python",
+      "entrypoint": "memory/tools/confidence/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "confidence",
+          "score",
+          "risk",
+          "assessment",
+          "reliability"
+        ],
+        "phases": [
+          "pre"
+        ],
+        "modes": [
+          "auto"
+        ],
+        "dispatch_args": {
+          "mode": "score",
+          "map": {
+            "task": "task_description"
+          }
+        }
+      }
+    },
+    {
+      "name": "failure-query",
+      "version": "1.0.0",
+      "description": "Pre-task guardrail: query graph + lessons for known failure patterns matching this task",
+      "language": "python",
+      "entrypoint": "memory/tools/failure-query/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "failure",
+          "past",
+          "lesson",
+          "mistake",
+          "guardrail",
+          "recurring"
+        ],
+        "phases": [
+          "pre"
+        ],
+        "modes": [
+          "auto"
+        ],
+        "dispatch_args": {
+          "map": {
+            "task": "task_description"
+          }
+        }
+      }
+    },
+    {
+      "name": "consolidate",
+      "version": "1.0.0",
+      "description": "Batch consolidate related lessons into a reusable skill by scanning for candidates and applying merges. Run 'scan' to find candidates, 'apply N' to write.",
+      "language": "python",
+      "entrypoint": "memory/tools/consolidate/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "consolidate",
+          "merge",
+          "dedup",
+          "prune",
+          "compress",
+          "scan",
+          "apply"
+        ],
+        "phases": [
+          "post"
+        ],
+        "modes": [
+          "auto"
+        ],
+        "dispatch_args": {
+          "mode": "scan",
+          "map": {
+            "task": "task_description"
+          }
+        }
+      }
+    },
+    {
+      "name": "graph-query",
+      "version": "1.0.0",
+      "description": "Query the SAOM knowledge graph (Q1-Q6). Q6 = semantic similarity search via TF-IDF.",
+      "language": "python",
+      "entrypoint": "memory/tools/graph-query/tool.py",
+      "created_at": "2026-07-05T00:00:00Z",
+      "last_used": "2026-07-05T12:59:00Z",
+      "success_count": 1,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "graph",
+          "query",
+          "search",
+          "find",
+          "relationship",
+          "node",
+          "edge",
+          "traverse"
+        ],
+        "phases": [
+          "pre",
+          "post"
+        ],
+        "modes": [
+          "manual"
+        ]
+      }
+    },
+    {
+      "name": "lesson-extractor",
+      "version": "1.0.0",
+      "description": "Extract structured lessons from task outcomes and append to lessons.jsonl",
+      "language": "python",
+      "entrypoint": "memory/tools/lesson-extractor/tool.py",
+      "created_at": "2026-07-05T00:00:00Z",
+      "last_used": "2026-07-05T12:59:00Z",
+      "success_count": 1,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "lesson",
+          "extract",
+          "learn",
+          "outcome",
+          "reflect",
+          "summary"
+        ],
+        "phases": [
+          "post"
+        ],
+        "modes": [
+          "auto"
+        ],
+        "dispatch_args": {
+          "mode": "auto",
+          "map": {
+            "task": "interaction_text"
+          }
+        }
+      }
+    },
+    {
+      "name": "saom-health",
+      "version": "1.0.0",
+      "description": "Validates SAOM memory integrity: graph consistency, registry, lessons, file health. Detects dangling edges, orphans, stale stats, template residue.",
+      "language": "python",
+      "entrypoint": "memory/tools/saom-health/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "health",
+          "audit",
+          "check",
+          "validate",
+          "verify",
+          "integrity",
+          "report",
+          "status"
+        ],
+        "phases": [
+          "pre",
+          "post"
+        ],
+        "modes": [
+          "manual"
+        ]
+      }
+    },
+    {
+      "name": "immune",
+      "version": "1.0.0",
+      "description": "Adaptive immune system: detects known failure patterns, deploys countermeasures, learns from new failures, forgets weak antibodies.",
+      "language": "python",
+      "entrypoint": "memory/tools/immune/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": "2026-07-10T04:58:49Z",
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "immune",
+          "detect",
+          "pathogen",
+          "antibody",
+          "protect",
+          "failure pattern"
+        ],
+        "phases": [
+          "pre"
+        ],
+        "modes": [
+          "auto"
+        ]
+      }
+    },
+    {
+      "name": "plasticity",
+      "version": "1.0.0",
+      "description": "Dynamic edge weight manager. Strengthens connections on success, weakens on failure, decays over time.",
+      "language": "python",
+      "entrypoint": "memory/tools/plasticity/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": "2026-07-10T04:58:48Z",
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "plasticity",
+          "strengthen",
+          "weaken",
+          "decay",
+          "edge",
+          "weight",
+          "connection"
+        ],
+        "phases": [
+          "post"
+        ],
+        "modes": [
+          "auto"
+        ]
+      }
+    },
+    {
+      "name": "curriculum",
+      "version": "1.0.0",
+      "description": "Curriculum learning system. Skill tree with tracks, difficulty levels, prerequisites, mastery tracking, learning paths.",
+      "language": "python",
+      "entrypoint": "memory/tools/curriculum/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": "2026-07-10T04:58:34Z",
+      "success_count": 1,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "curriculum",
+          "skill",
+          "learn",
+          "track",
+          "progress",
+          "mastery",
+          "prerequisite"
+        ],
+        "phases": [
+          "pre"
+        ],
+        "modes": [
+          "auto"
+        ]
+      }
+    },
+    {
+      "name": "failure-predict",
+      "version": "1.0.0",
+      "description": "Failure predictor. Analyzes task + approach against immune system, past failures, environment constraints, complexity, and curriculum readiness. Returns verdict: WILL_FAIL / HIGH_RISK / LOW_RISK / LIKELY_SUCCEED.",
+      "language": "python",
+      "entrypoint": "memory/tools/failure-predict/tool.py",
+      "created_at": "2026-07-07T00:00:00Z",
+      "last_used": "2026-07-10T04:58:34Z",
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "predict",
+          "failure",
+          "risk",
+          "verdict",
+          "warning",
+          "will fail"
+        ],
+        "phases": [
+          "pre"
+        ],
+        "modes": [
+          "auto"
+        ]
+      }
+    },
+    {
+      "name": "preference",
+      "version": "1.0.0",
+      "description": "Preference learning engine. Observes user corrections, generalizes into rules, checks tasks against learned preferences before acting.",
+      "language": "python",
+      "entrypoint": "memory/tools/preference/tool.py",
+      "created_at": "2026-07-08T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "preference",
+          "correction",
+          "user",
+          "feedback",
+          "generalize",
+          "customize"
+        ],
+        "phases": [
+          "post"
+        ],
+        "modes": [
+          "auto"
+        ],
+        "dispatch_args": {
+          "mode": "check",
+          "map": {
+            "task": "input_text"
+          }
+        }
+      }
+    },
+    {
+      "name": "skill-crystallizer",
+      "version": "1.0.0",
+      "description": "Crystallizes reusable patterns into SKILL.md files without writing code. Safer, more composable than tool-weaver.",
+      "language": "python",
+      "entrypoint": "memory/tools/skill-crystallizer/tool.py",
+      "created_at": "2026-07-10T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "crystallize",
+          "skill",
+          "pattern",
+          "reusable",
+          "save pattern",
+          "capture",
+          "compose",
+          "crystallization"
+        ],
+        "phases": [
+          "post"
+        ],
+        "modes": [
+          "manual"
+        ],
+        "dispatch_args": {
+          "mode": "crystallize",
+          "map": {
+            "task": "steps"
+          }
+        }
+      }
+    },
+    {
+      "name": "task-decomposer",
+      "version": "1.0.0",
+      "description": "AutoGPT-style recursive goal decomposition. Breaks high-level goals into sub-tasks, maps each to matching SAOM tools, outputs structured dependency plan.",
+      "language": "python",
+      "entrypoint": "memory/tools/task-decomposer/tool.py",
+      "created_at": "2026-07-10T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "decompose",
+          "plan",
+          "subtask",
+          "break down",
+          "multi-step",
+          "complex",
+          "goal",
+          "hierarchical",
+          "recursive",
+          "decomposition"
+        ],
+        "phases": [
+          "pre"
+        ],
+        "modes": [
+          "manual"
+        ],
+        "dispatch_args": {
+          "mode": "decompose",
+          "map": {
+            "task": "goal"
+          }
+        }
+      }
+    },
+    {
+      "name": "web-forager",
+      "version": "1.0.0",
+      "description": "Live web discovery tool. Searches DuckDuckGo, evaluates results, creates knowledge notes + graph nodes.",
+      "location": "memory/tools/web-forager/",
+      "dependencies": [],
+      "created_at": "2026-07-10T00:00:00Z",
+      "last_used": null,
+      "use_count": 0,
+      "success_count": 0,
+      "failure_count": 0,
+      "avg_confidence": null,
+      "triggers": {
+        "keywords": [
+          "web",
+          "search",
+          "research",
+          "find",
+          "discover",
+          "lookup",
+          "internet",
+          "current"
+        ],
+        "phases": [
+          "pre"
+        ],
+        "modes": [
+          "auto"
+        ],
+        "dispatch_args": {
+          "mode": "discover",
+          "map": {
+            "task": "query"
+          }
+        }
+      }
+    },
+    {
+      "name": "tool-weaver",
+      "version": "1.0.0",
+      "description": "Autonomous Python tool generator. Generates tool.py + tool.json from JSON spec, validates syntax, installs to memory/tools/, updates registry + graph.",
+      "language": "python",
+      "entrypoint": "memory/tools/tool-weaver/tool.py",
+      "created_at": "2026-07-10T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "generate",
+          "create",
+          "weave",
+          "tool",
+          "scaffold",
+          "new tool",
+          "generate tool"
+        ],
+        "phases": [
+          "pre",
+          "post"
+        ],
+        "modes": [
+          "manual"
+        ]
+      }
+    },
+    {
+      "name": "session-files",
+      "version": "1.0.0",
+      "description": "Tracks files created/deleted per session. record: log a file create or delete. summary: view file activity for one or all sessions.",
+      "language": "python",
+      "entrypoint": "memory/tools/session-files/tool.py",
+      "created_at": "2026-07-10T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "file",
+          "track",
+          "session",
+          "created",
+          "deleted",
+          "record",
+          "activity"
+        ],
+        "phases": [
+          "post"
+        ],
+        "modes": [
+          "auto",
+          "manual"
+        ],
+        "dispatch_args": {
+          "mode": "record",
+          "map": {
+            "session_id": "session_id",
+            "action": "action",
+            "filepath": "filepath"
+          }
+        }
+      }
+    },
+    {
+      "name": "vault",
+      "version": "1.0.0",
+      "description": "Secure vault for API keys, tokens, passwords, important links. Values masked on display. Operations: set, get (masked), list, delete.",
+      "language": "python",
+      "entrypoint": "memory/tools/vault/tool.py",
+      "created_at": "2026-07-10T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "vault",
+          "secret",
+          "key",
+          "token",
+          "password",
+          "api",
+          "credential",
+          "store"
+        ],
+        "phases": [
+          "pre",
+          "post"
+        ],
+        "modes": [
+          "manual"
+        ],
+        "dispatch_args": {
+          "mode": "list",
+          "map": {
+            "task": "category"
+          }
+        }
+      }
+    },
+    {
+      "name": "status",
+      "version": "1.0.0",
+      "description": "One-shot self-awareness summary. Reads all registry + init + graph + lessons + vault into compact JSON.",
+      "language": "python",
+      "entrypoint": "memory/tools/status/tool.py",
+      "created_at": "2026-07-10T00:00:00Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0,
+      "triggers": {
+        "keywords": [
+          "status",
+          "summary",
+          "self",
+          "awareness",
+          "what can you do",
+          "capabilities",
+          "introspect",
+          "overview",
+          "dashboard"
+        ],
+        "phases": [
+          "pre"
+        ],
+        "modes": [
+          "auto",
+          "manual"
+        ],
+        "dispatch_args": {
+          "mode": "status"
+        }
+      }
+    },
+    {
+      "name": "hello-world",
+      "version": "1.0.0",
+      "description": "Greets a user by name",
+      "language": "python",
+      "entrypoint": "memory/tools/hello-world/tool.py",
+      "created_at": "2026-07-10T07:10:06Z",
+      "last_used": null,
+      "success_count": 0,
+      "failure_count": 0
+    }
+  ],
+  "total_tools": 22,
+  "last_tool_created": "2026-07-10T07:10:06Z"
+}

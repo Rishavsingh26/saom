@@ -1,0 +1,32 @@
+{
+  "name": "failure-predict",
+  "version": "1.0.0",
+  "description": "Failure predictor. Analyzes task + approach against immune system, past failures, environment constraints, complexity, and curriculum readiness. Returns verdict: WILL_FAIL / HIGH_RISK / LOW_RISK / LIKELY_SUCCEED with reasoning.",
+  "language": "python",
+  "entrypoint": "memory/tools/failure-predict/tool.py",
+  "commands": {
+    "predict": "Predict failure risk for a task. Usage: predict \"<task>\" [\"<approach>\"]",
+    "check-env": "Check environment constraints for a task. Usage: check-env \"<task>\"",
+    "check-complexity": "Analyze task complexity. Usage: check-complexity \"<task>\""
+  },
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "predict",
+      "failure",
+      "risk",
+      "verdict",
+      "warning",
+      "will fail"
+    ],
+    "phases": [
+      "pre"
+    ],
+    "modes": [
+      "auto"
+    ]
+  }
+}

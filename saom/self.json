@@ -1,0 +1,12 @@
+{
+  "mode": "ended",
+  "goal": null,
+  "confidence": 50,
+  "session_count": 4,
+  "decision_history": [],
+  "mode_history": [],
+  "confidence_trajectory": [],
+  "created": "2026-07-30T18:34:59.413294",
+  "started_at": "2026-07-31T04:22:47.138351",
+  "ended_at": "2026-08-01T06:46:29.757250"
+}

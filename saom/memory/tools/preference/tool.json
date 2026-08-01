@@ -1,0 +1,67 @@
+{
+  "name": "preference",
+  "version": "1.0.0",
+  "description": "Observes user corrections, generalizes into preference rules, checks tasks against rules.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "mode",
+      "type": "string",
+      "description": "Mode: observe, generalize, check, status"
+    },
+    {
+      "name": "input_text",
+      "type": "string",
+      "description": "Original assistant response"
+    },
+    {
+      "name": "outcome_text",
+      "type": "string",
+      "description": "Corrected response"
+    },
+    {
+      "name": "correction_text",
+      "type": "string",
+      "description": "User correction feedback"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "json",
+      "description": "Result based on mode: correction record, generalized rules, check warnings, status report"
+    }
+  ],
+  "dependencies": [
+    "json",
+    "os",
+    "subprocess"
+  ],
+  "created_at": "2026-07-08T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "preference",
+      "correction",
+      "user",
+      "feedback",
+      "generalize",
+      "customize"
+    ],
+    "phases": [
+      "post"
+    ],
+    "modes": [
+      "auto"
+    ],
+    "dispatch_args": {
+      "mode": "check",
+      "map": {
+        "task": "input_text"
+      }
+    }
+  }
+}

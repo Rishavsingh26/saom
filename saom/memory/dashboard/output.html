@@ -1,0 +1,889 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>SAOM Dashboard â€” Session #5</title>
+  <script src="https://cdn.jsdelivr.net/npm/vis-network/standalone/umd/vis-network.min.js"></script>
+  <style>
+    body { font-family: monospace; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
+    .card { background: #16213e; border: 1px solid #0f3460; border-radius: 8px; padding: 16px; margin: 12px 0; }
+    h1 { color: #e94560; }
+    h2 { color: #0f3460; }
+    .stat { display: inline-block; padding: 8px 16px; background: #0f3460; border-radius: 4px; margin: 4px; }
+    #graph { width: 100%; height: 500px; border: 1px solid #0f3460; border-radius: 8px; }
+    .node-session { color: #e94560; }
+    .node-task { color: #ffd700; }
+    .node-skill { color: #00ff88; }
+    .node-lesson { color: #00b4d8; }
+    .node-failure { color: #ff4444; }
+    .node-tool { color: #ff8800; }
+    .node-concept { color: #aa66ff; }
+    .node-finding { color: #00ffcc; }
+    .node-pipeline { color: #ff66aa; }
+    .node-mental-model { color: #66ff66; }
+  </style>
+</head>
+<body>
+  <h1>SAOM Dashboard</h1>
+  <div class="card">
+    <h2>Stats</h2>
+    <div class="stat">Sessions: <span id="session-count">N</span></div>
+    <div class="stat">Graph Nodes: <span id="node-count">N</span></div>
+    <div class="stat">Graph Edges: <span id="edge-count">N</span></div>
+    <div class="stat">Lessons: <span id="lesson-count">N</span></div>
+    <div class="stat">Tools: <span id="tool-count">N</span></div>
+    <div class="stat">Foraged Skills: <span id="foraged-count">N</span></div>
+    <div class="stat">Findings: <span id="finding-count">N</span></div>
+    <div class="stat">Pipelines: <span id="pipeline-count">N</span></div>
+    <div class="stat">Mental Models: <span id="mental-model-count">N</span></div>
+  </div>
+  <div class="card">
+    <h2>Knowledge Graph</h2>
+    <div id="graph"></div>
+  </div>
+  <div class="card">
+    <h2>Lessons Timeline</h2>
+    <ul id="lessons"></ul>
+  </div>
+  <div class="card">
+    <h2>Registered Tools</h2>
+    <ul id="tools"></ul>
+  </div>
+  <div class="card">
+    <h2>Foraged Skills</h2>
+    <ul id="foraged"></ul>
+  </div>
+  <div class="card">
+    <h2>Research Findings</h2>
+    <ul id="findings"></ul>
+  </div>
+  <div class="card">
+    <h2>Pipelines</h2>
+    <ul id="pipelines"></ul>
+  </div>
+  <div class="card">
+    <h2>Mental Models</h2>
+    <ul id="mental-models"></ul>
+  </div>
+  <script>
+    const data = {
+      sessions: 5,
+      nodes: [
+  {
+    "id": "session-0-init",
+    "type": "session",
+    "label": "Initial session",
+    "summary": "SAOM bootstrap. No tasks yet.",
+    "timestamp": "2026-07-01T23:00:00Z",
+    "session_id": 0,
+    "quality_score": null,
+    "embedding_keywords": [
+      "bootstrap",
+      "init",
+      "saom",
+      "start"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "session-1",
+    "type": "session",
+    "label": "SAOM test session 1",
+    "summary": "First test session. Ran graph write test and reflection test.",
+    "timestamp": "2026-07-01T23:40:00Z",
+    "session_id": 1,
+    "quality_score": 1.0,
+    "embedding_keywords": [
+      "test",
+      "saom",
+      "session-1",
+      "init"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "task:test-grep-1",
+    "type": "task",
+    "label": "Test grep on SKILL.md",
+    "domain": "testing",
+    "complexity": "low",
+    "outcome": "success",
+    "timestamp": "2026-07-01T23:40:00Z",
+    "session_id": 1,
+    "embedding_keywords": [
+      "test",
+      "grep",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "lesson:grep-returns-results",
+    "type": "lesson",
+    "summary": "Grep found all section headers in SKILL.md. Useful for validation.",
+    "root_cause": "N/A â€” test passed",
+    "fix": "Use grep to verify SKILL.md structure after edits",
+    "severity": "info",
+    "confidence": 0.5,
+    "reinforced_count": 0,
+    "contradicted_count": 0,
+    "last_confirmed": "2026-07-01T23:40:00Z",
+    "timestamp": "2026-07-01T23:40:00Z",
+    "session_id": 1,
+    "embedding_keywords": [
+      "lesson",
+      "grep",
+      "validation",
+      "skill-md"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "session-2",
+    "type": "session",
+    "label": "add2nn development + SAOM v6 upgrade",
+    "summary": "Built neural network addition tool. Learned: linear problems need linear models. Upgraded SAOM to v6 with semantic retrieval, falsification gate, explorer mode.",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 2,
+    "quality_score": 0.9,
+    "embedding_keywords": [
+      "saom",
+      "add2nn",
+      "upgrade",
+      "neural-network",
+      "v6"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "task:add2nn-build",
+    "type": "task",
+    "label": "Build add2nn neural network tool",
+    "domain": "machine-learning",
+    "complexity": "medium",
+    "outcome": "success",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 2,
+    "embedding_keywords": [
+      "add2nn",
+      "neural-network",
+      "addition",
+      "python",
+      "tool"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "lesson:linear-problem-linear-model",
+    "type": "lesson",
+    "summary": "Non-linear activations (ReLU/tanh) for linear addition creates residual error â€” use linear model instead.",
+    "root_cause": "Overengineering the architecture â€” ReLU/tanh networks approximate piecewise rather than solving exact linear relation",
+    "fix": "Use single-layer linear perceptron (no hidden activation) for any purely linear target function. w1=1, w2=1, b=0 with zero loss.",
+    "severity": "key",
+    "confidence": 0.7,
+    "reinforced_count": 1,
+    "contradicted_count": 0,
+    "last_confirmed": "2026-07-02T00:00:00Z",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 2,
+    "embedding_keywords": [
+      "lesson",
+      "linear",
+      "neural-network",
+      "architecture",
+      "activation",
+      "addition"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "hypothesis:non-linear-for-linear",
+    "type": "hypothesis",
+    "label": "Non-linear activation can learn addition",
+    "summary": "Non-linear activations can represent linear addition function",
+    "assumption": "A neural network with ReLU/tanh hidden layers can learn f(a,b)=a+b exactly given enough data and epochs",
+    "confidence": 0.5,
+    "outcome": "refuted",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 2,
+    "embedding_keywords": [
+      "hypothesis",
+      "non-linear",
+      "relu",
+      "tanh",
+      "addition",
+      "linear"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "playbook:match-model-to-problem",
+    "type": "playbook",
+    "label": "Match model architecture to problem nature",
+    "summary": "Before choosing a model architecture, determine if the target function is linear or non-linear. Linear â†’ linear model. Non-linear â†’ choose activation based on domain.",
+    "steps": [
+      "1. Analyze: is the target function linear? (check: f(a+b) = f(a)+f(b))",
+      "2. If linear: use linear regression / single-layer perceptron â€” zero activations",
+      "3. If non-linear: try ReLU for piecewise-linear, tanh for bounded, softmax for classification",
+      "4. Write hypothesis node before training, check for contradictions in graph"
+    ],
+    "domains": [
+      "machine-learning",
+      "deep-learning",
+      "data-science"
+    ],
+    "success_count": 1,
+    "confidence": 0.7,
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 2,
+    "embedding_keywords": [
+      "playbook",
+      "model-architecture",
+      "linear",
+      "non-linear",
+      "neural-network",
+      "best-practice"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "session-3",
+    "type": "session",
+    "label": "SAOM v7 upgrade + 10 new skills",
+    "summary": "Upgraded SAOM v6â†’v7 (Deep Reasoning, Deep Research, Architect, Pipelines, Mental Models, Router, Maintenance). Created 10 new skills (verification, debugging, self-review, test-driven-validation, clarification, ideation, analogical-transfer, reframing, constraint-play, narrative-craft). Fixed duplicate numbering, memory sync issues.",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "quality_score": 0.95,
+    "embedding_keywords": [
+      "session",
+      "v7",
+      "upgrade",
+      "skills",
+      "quality-gate",
+      "divergent-thinking"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "skill:verification",
+    "type": "skill",
+    "label": "Verification skill",
+    "domain": "quality-gate",
+    "summary": "Checks facts/numbers/citations before stating",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "embedding_keywords": [
+      "verification",
+      "quality-gate",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "skill:debugging",
+    "type": "skill",
+    "label": "Debugging skill",
+    "domain": "quality-gate",
+    "summary": "Isolates one hypothesis at a time, no stacked fixes",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "embedding_keywords": [
+      "debugging",
+      "quality-gate",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "skill:self-review",
+    "type": "skill",
+    "label": "Self-review skill",
+    "domain": "quality-gate",
+    "summary": "Catches errors, edge cases, security basics before presenting",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "embedding_keywords": [
+      "self-review",
+      "quality-gate",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "skill:test-driven-validation",
+    "type": "skill",
+    "label": "Test-driven validation skill",
+    "domain": "quality-gate",
+    "summary": "Runs concrete checks before declaring done",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "embedding_keywords": [
+      "test-driven-validation",
+      "quality-gate",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "skill:clarification",
+    "type": "skill",
+    "label": "Clarification skill",
+    "domain": "quality-gate",
+    "summary": "Checks ambiguous requests before committing effort",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "embedding_keywords": [
+      "clarification",
+      "quality-gate",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "skill:ideation",
+    "type": "skill",
+    "label": "Ideation skill",
+    "domain": "divergent-thinking",
+    "summary": "Generates 5-8 distinct ideas before evaluating",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "embedding_keywords": [
+      "ideation",
+      "divergent-thinking",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "skill:analogical-transfer",
+    "type": "skill",
+    "label": "Analogical transfer skill",
+    "domain": "divergent-thinking",
+    "summary": "Borrows solutions from structurally similar domains",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "embedding_keywords": [
+      "analogical-transfer",
+      "divergent-thinking",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "skill:reframing",
+    "type": "skill",
+    "label": "Reframing skill",
+    "domain": "divergent-thinking",
+    "summary": "Generates alternate problem framings when stuck",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "embedding_keywords": [
+      "reframing",
+      "divergent-thinking",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "skill:constraint-play",
+    "type": "skill",
+    "label": "Constraint-play skill",
+    "domain": "divergent-thinking",
+    "summary": "Novel approaches via exaggerating/removing/inverting constraints",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "embedding_keywords": [
+      "constraint-play",
+      "divergent-thinking",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "skill:narrative-craft",
+    "type": "skill",
+    "label": "Narrative-craft skill",
+    "domain": "divergent-thinking",
+    "summary": "Structured resonant output for user-facing writing",
+    "timestamp": "2026-07-02T00:00:00Z",
+    "session_id": 3,
+    "embedding_keywords": [
+      "narrative-craft",
+      "divergent-thinking",
+      "skill"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "task:persist-test-4",
+    "type": "task",
+    "label": "Graph persistence test",
+    "domain": "testing",
+    "complexity": "low",
+    "outcome": "success",
+    "timestamp": "2026-07-02T16:30:00Z",
+    "session_id": 4,
+    "embedding_keywords": [
+      "test",
+      "persistence",
+      "graph"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "session-4",
+    "type": "session",
+    "label": "SAOM evaluation session 4",
+    "summary": "Evaluation session: refactored SAOM to dispatcher+sub-skills, graph integrity fix, persistence test, reflection test.",
+    "timestamp": "2026-07-02T16:30:00Z",
+    "session_id": 4,
+    "quality_score": null,
+    "embedding_keywords": [
+      "session",
+      "evaluation",
+      "refactoring",
+      "testing"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "task:reflection-test-4",
+    "type": "task",
+    "label": "Reflection loop test",
+    "domain": "testing",
+    "complexity": "low",
+    "outcome": "success",
+    "timestamp": "2026-07-02T16:31:00Z",
+    "session_id": 4,
+    "embedding_keywords": [
+      "test",
+      "reflection",
+      "loop",
+      "evaluation"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "lesson:sub-skill-architecture",
+    "type": "lesson",
+    "summary": "SAOM sub-skill architecture works: dispatcher routes to sub-skills loaded on-demand. Sub-skills must be explicitly loaded per mode entry — they don't auto-inject like SKILL.md.",
+    "root_cause": "Original SKILL.md was 1064 lines loading entirely at activation, consuming ~30% context",
+    "fix": "Compress SKILL.md to thin dispatcher (~90 lines). Extract each mode's instructions into sub-skills/<mode>.md. Load sub-skill only when entering that mode.",
+    "severity": "key",
+    "confidence": 0.7,
+    "reinforced_count": 1,
+    "contradicted_count": 0,
+    "last_confirmed": "2026-07-02T16:31:00Z",
+    "timestamp": "2026-07-02T16:31:00Z",
+    "session_id": 4,
+    "embedding_keywords": [
+      "lesson",
+      "sub-skill",
+      "architecture",
+      "refactoring",
+      "context-optimization"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "lesson:contradicts-edges-for-falsification",
+    "type": "lesson",
+    "summary": "Falsification gate must use 'contradicts' edges as primary search, not keywords. Keyword-only fallback produces false positives from surface-level matches.",
+    "root_cause": "Keyword search matched 'linear' across unrelated domains (sub-skill architecture lesson matched linear-problem-model lesson)",
+    "fix": "Prioritize 'contradicts' edge traversal over keyword search. Add semantic retrieval (embeddings) as secondary pass to reduce false positives. Show user the contradiction explanation so they can override spurious matches.",
+    "severity": "medium",
+    "confidence": 0.6,
+    "reinforced_count": 1,
+    "contradicted_count": 0,
+    "last_confirmed": "2026-07-02T16:33:00Z",
+    "timestamp": "2026-07-02T16:33:00Z",
+    "session_id": 4,
+    "embedding_keywords": [
+      "lesson",
+      "falsification-gate",
+      "contradicts",
+      "edges",
+      "semantic",
+      "retrieval",
+      "false-positive"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "finding:semantic-gate-validated",
+    "type": "finding",
+    "claim": "Semantic retrieval with TF-IDF correctly enables the falsification gate. Queries matching known failure patterns (non-linear activations for addition) are blocked (sim=0.337 > threshold). Novel-domain queries (JWT API auth) pass through (sim=0.147 < threshold). Contradicts-edge check gated at sim>0.25 prevents false positives.",
+    "confidence": "high",
+    "sources": [
+      {
+        "title": "SAOM evaluation session 4 — validate_gate.py",
+        "trust_score": 0.9
+      }
+    ],
+    "contested_by": [],
+    "scope": "Falsification gate + semantic retrieval interaction in SAOM v7.1.1",
+    "timestamp": "2026-07-02T16:35:00Z",
+    "session_id": 4,
+    "embedding_keywords": [
+      "finding",
+      "semantic",
+      "retrieval",
+      "falsification-gate",
+      "validation",
+      "threshold"
+    ],
+    "metadata": {}
+  }
+],
+      edges: [
+  {
+    "source_id": "session-1",
+    "target_id": "task:test-grep-1",
+    "type": "followed_by",
+    "weight": 1.0,
+    "timestamp": "2026-07-01T23:40:00Z"
+  },
+  {
+    "source_id": "task:test-grep-1",
+    "target_id": "lesson:grep-returns-results",
+    "type": "produces",
+    "weight": 1.0,
+    "timestamp": "2026-07-01T23:40:00Z"
+  },
+  {
+    "source_id": "session-2",
+    "target_id": "task:add2nn-build",
+    "type": "followed_by",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "task:add2nn-build",
+    "target_id": "lesson:linear-problem-linear-model",
+    "type": "produces",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "task:add2nn-build",
+    "target_id": "hypothesis:non-linear-for-linear",
+    "type": "followed_by",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "hypothesis:non-linear-for-linear",
+    "target_id": "lesson:linear-problem-linear-model",
+    "type": "contradicts",
+    "weight": 0.8,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "playbook:match-model-to-problem",
+    "target_id": "lesson:linear-problem-linear-model",
+    "type": "abstracts_from",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-2",
+    "target_id": "session-1",
+    "type": "followed_by",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "session-2",
+    "type": "followed_by",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "skill:verification",
+    "type": "uses",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "skill:debugging",
+    "type": "uses",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "skill:self-review",
+    "type": "uses",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "skill:test-driven-validation",
+    "type": "uses",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "skill:clarification",
+    "type": "uses",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "skill:ideation",
+    "type": "uses",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "skill:analogical-transfer",
+    "type": "uses",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "skill:reframing",
+    "type": "uses",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "skill:constraint-play",
+    "type": "uses",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-3",
+    "target_id": "skill:narrative-craft",
+    "type": "uses",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "source_id": "session-0-init",
+    "target_id": "task:persist-test-4",
+    "type": "followed_by",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T16:30:00Z"
+  },
+  {
+    "source_id": "session-0-init",
+    "target_id": "task:reflection-test-4",
+    "type": "followed_by",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T16:31:00Z"
+  },
+  {
+    "source_id": "task:reflection-test-4",
+    "target_id": "lesson:sub-skill-architecture",
+    "type": "produces",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T16:31:00Z"
+  },
+  {
+    "source_id": "session-4",
+    "target_id": "task:reflection-test-4",
+    "type": "followed_by",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T16:31:00Z"
+  },
+  {
+    "source_id": "session-4",
+    "target_id": "lesson:contradicts-edges-for-falsification",
+    "type": "produces",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T16:33:00Z"
+  },
+  {
+    "source_id": "lesson:contradicts-edges-for-falsification",
+    "target_id": "lesson:sub-skill-architecture",
+    "type": "related_to",
+    "weight": 0.5,
+    "timestamp": "2026-07-02T16:33:00Z"
+  },
+  {
+    "source_id": "finding:semantic-gate-validated",
+    "target_id": "lesson:contradicts-edges-for-falsification",
+    "type": "reinforces",
+    "weight": 0.8,
+    "timestamp": "2026-07-02T16:35:00Z"
+  },
+  {
+    "source_id": "finding:semantic-gate-validated",
+    "target_id": "lesson:linear-problem-linear-model",
+    "type": "related_to",
+    "weight": 0.6,
+    "timestamp": "2026-07-02T16:35:00Z"
+  },
+  {
+    "source_id": "session-4",
+    "target_id": "finding:semantic-gate-validated",
+    "type": "produces",
+    "weight": 1.0,
+    "timestamp": "2026-07-02T16:35:00Z"
+  }
+],
+      lessons: [
+  {
+    "lesson_id": "grep-returns-results",
+    "summary": "Grep found all section headers in SKILL.md. Useful for validation.",
+    "root_cause": "test",
+    "fix": "Use grep to verify SKILL.md structure after edits",
+    "severity": "info",
+    "session_id": 1,
+    "timestamp": "2026-07-01T23:40:00Z"
+  },
+  {
+    "lesson_id": "linear-problem-linear-model",
+    "summary": "Non-linear activations (ReLU/tanh) are wrong for learning linear addition -- the network approximates rather than solves exactly.",
+    "root_cause": "Overthinking the architecture",
+    "fix": "Use a single-layer linear network (perceptron) for linear functions. It mathematically converges to w1=1,w2=1,b=0 with zero loss.",
+    "severity": "key",
+    "session_id": 2,
+    "timestamp": "2026-07-02T00:00:00Z"
+  },
+  {
+    "id": "lesson:sub-skill-architecture",
+    "type": "lesson",
+    "summary": "SAOM sub-skill architecture works: dispatcher routes to sub-skills loaded on-demand. Sub-skills must be explicitly loaded per mode entry — they don't auto-inject like SKILL.md.",
+    "root_cause": "Original SKILL.md was 1064 lines loading entirely at activation, consuming ~30% context",
+    "fix": "Compress SKILL.md to thin dispatcher (~90 lines). Extract each mode's instructions into sub-skills/<mode>.md. Load sub-skill only when entering that mode.",
+    "severity": "key",
+    "confidence": 0.7,
+    "reinforced_count": 1,
+    "contradicted_count": 0,
+    "last_confirmed": "2026-07-02T16:31:00Z",
+    "timestamp": "2026-07-02T16:31:00Z",
+    "session_id": 4,
+    "embedding_keywords": [
+      "lesson",
+      "sub-skill",
+      "architecture",
+      "refactoring",
+      "context-optimization"
+    ],
+    "metadata": {}
+  },
+  {
+    "id": "lesson:contradicts-edges-for-falsification",
+    "type": "lesson",
+    "summary": "Falsification gate must use 'contradicts' edges as primary search, not keywords. Keyword-only fallback produces false positives from surface-level matches.",
+    "root_cause": "Keyword search matched 'linear' across unrelated domains (sub-skill architecture lesson matched linear-problem-model lesson)",
+    "fix": "Prioritize 'contradicts' edge traversal over keyword search. Add semantic retrieval (embeddings) as secondary pass to reduce false positives. Show user the contradiction explanation so they can override spurious matches.",
+    "severity": "medium",
+    "confidence": 0.6,
+    "reinforced_count": 1,
+    "contradicted_count": 0,
+    "last_confirmed": "2026-07-02T16:33:00Z",
+    "timestamp": "2026-07-02T16:33:00Z",
+    "session_id": 4,
+    "embedding_keywords": [
+      "lesson",
+      "falsification-gate",
+      "contradicts",
+      "edges",
+      "semantic",
+      "retrieval",
+      "false-positive"
+    ],
+    "metadata": {}
+  }
+],
+      tools: [],
+      foraged: [],
+      findings: [
+  {
+    "id": "finding:semantic-gate-validated",
+    "type": "finding",
+    "claim": "Semantic retrieval with TF-IDF correctly enables the falsification gate. Queries matching known failure patterns (non-linear activations for addition) are blocked (sim=0.337 > threshold). Novel-domain queries (JWT API auth) pass through (sim=0.147 < threshold). Contradicts-edge check gated at sim>0.25 prevents false positives.",
+    "confidence": "high",
+    "sources": [
+      {
+        "title": "SAOM evaluation session 4 — validate_gate.py",
+        "trust_score": 0.9
+      }
+    ],
+    "contested_by": [],
+    "scope": "Falsification gate + semantic retrieval interaction in SAOM v7.1.1",
+    "timestamp": "2026-07-02T16:35:00Z",
+    "session_id": 4,
+    "embedding_keywords": [
+      "finding",
+      "semantic",
+      "retrieval",
+      "falsification-gate",
+      "validation",
+      "threshold"
+    ],
+    "metadata": {}
+  }
+],
+      pipelines: [],
+      mentalModels: []
+    };
+    const container = document.getElementById('graph');
+    const nodes = new vis.DataSet(data.nodes.map(n => ({
+      id: n.id, label: n.label || n.id,
+      color: { background: '#0f3460', border: '#e94560' },
+      title: `${n.type}: ${n.summary || ''}`
+    })));
+    const edges = new vis.DataSet(data.edges.map(e => ({
+      from: e.source_id, to: e.target_id,
+      label: e.type, arrows: 'to',
+      color: { color: '#e94560' }
+    })));
+    new vis.Network(container, { nodes, edges }, {
+      physics: { solver: 'forceAtlas2Based' },
+      interaction: { hover: true, tooltipDelay: 200 }
+    });
+    document.getElementById('session-count').textContent = data.sessions;
+    document.getElementById('node-count').textContent = data.nodes.length;
+    document.getElementById('edge-count').textContent = data.edges.length;
+    document.getElementById('lesson-count').textContent = data.lessons.length;
+    document.getElementById('tool-count').textContent = data.tools.length;
+    document.getElementById('foraged-count').textContent = data.foraged.length;
+    document.getElementById('finding-count').textContent = data.findings.length;
+    document.getElementById('pipeline-count').textContent = data.pipelines.length;
+    document.getElementById('mental-model-count').textContent = data.mentalModels.length;
+    data.lessons.forEach(l => {
+      const li = document.createElement('li');
+      li.textContent = `[${l.severity}] ${l.summary}`;
+      document.getElementById('lessons').appendChild(li);
+    });
+    data.tools.forEach(t => {
+      const li = document.createElement('li');
+      li.textContent = `${t.name} v${t.version} â€” ${t.description}`;
+      document.getElementById('tools').appendChild(li);
+    });
+    data.foraged.forEach(f => {
+      const li = document.createElement('li');
+      li.textContent = `${f.name} from ${f.source_url}`;
+      document.getElementById('foraged').appendChild(li);
+    });
+    data.findings.forEach(f => {
+      const li = document.createElement('li');
+      li.textContent = `[${f.confidence}] ${f.claim} (${f.scope})`;
+      document.getElementById('findings').appendChild(li);
+    });
+    data.pipelines.forEach(p => {
+      const li = document.createElement('li');
+      li.textContent = `${p.name} â€” ${p.steps.length} steps, used ${p.success_count}x`;
+      document.getElementById('pipelines').appendChild(li);
+    });
+    data.mentalModels.forEach(m => {
+      const li = document.createElement('li');
+      li.textContent = `[${m.domain}] ${m.principle}`;
+      document.getElementById('mental-models').appendChild(li);
+    });
+  </script>
+</body>
+</html>

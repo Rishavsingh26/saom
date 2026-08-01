@@ -1,0 +1,66 @@
+{
+  "name": "skill-tracker",
+  "version": "1.0.0",
+  "description": "Records skill usage and outcome. Updates skills/registry.json with use_count, success_count, last_used, avg_confidence. Also flags low-success skills for pruning.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "mode",
+      "type": "string",
+      "description": "'use' to record skill usage, 'prune-scan' to find low-success skills, 'prune-remove' to delete a flagged skill"
+    },
+    {
+      "name": "skill_name",
+      "type": "string",
+      "description": "Name of the skill (for mode=use)"
+    },
+    {
+      "name": "outcome",
+      "type": "string",
+      "description": "'success' or 'failure' (for mode=use)"
+    },
+    {
+      "name": "confidence",
+      "type": "float",
+      "description": "Confidence score 0-100 (optional, for mode=use)"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "json",
+      "description": "Updated skill entry or prune recommendations"
+    }
+  ],
+  "dependencies": [
+    "json"
+  ],
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "skill",
+      "track",
+      "use",
+      "count",
+      "prune",
+      "registry",
+      "usage"
+    ],
+    "phases": [
+      "post"
+    ],
+    "modes": [
+      "auto"
+    ],
+    "dispatch_args": {
+      "mode": "search",
+      "map": {
+        "task": "skill_name"
+      }
+    }
+  }
+}

@@ -1,0 +1,44 @@
+{
+  "name": "saom-health",
+  "version": "1.0.0",
+  "description": "Contrarian memory health-check for SAOM. Validates JSON files, cross-references directories and registries, detects date anomalies, duplicate node IDs, orphan session files, circular edge references, dangling references, stats inaccuracy, and lesson consistency issues. Designed to find things that are WRONG even when they look right.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [],
+  "outputs": [
+    {
+      "name": "result",
+      "type": "json",
+      "description": "Health check result with {'healthy': bool, 'checks': list, 'surprises_found': int, 'summary': str}"
+    }
+  ],
+  "dependencies": [
+    "json",
+    "os",
+    "re",
+    "datetime"
+  ],
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "health",
+      "audit",
+      "check",
+      "validate",
+      "verify",
+      "integrity",
+      "report",
+      "status"
+    ],
+    "phases": [
+      "pre",
+      "post"
+    ],
+    "modes": [
+      "manual"
+    ]
+  }
+}

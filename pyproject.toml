@@ -1,0 +1,21 @@
+[project]
+name = "saom"
+version = "9.4.0"
+description = "Super Agent Ouroboros Manager — self-improving cognitive architecture for LLM agents"
+authors = [{ name = "SAOM Contributors" }]
+license = { text = "MIT" }
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "openai>=1.0.0",
+]
+
+[project.scripts]
+saom = "saom.cli:main"
+
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["saom*"]

@@ -1,0 +1,36 @@
+{
+  "name": "immune",
+  "version": "1.0.0",
+  "description": "Adaptive immune system: detects known failure patterns (pathogens), deploys countermeasures (antibodies), learns from new failures, forgets weak antibodies.",
+  "language": "python",
+  "entrypoint": "memory/tools/immune/tool.py",
+  "commands": {
+    "detect": "Check task description against known antibodies. Returns matches with score, effective_strength, and decision (auto_deploy/suggest/none).",
+    "learn": "Create a new antibody from failure/success outcome. Auto-detects domain from keywords.",
+    "deploy": "Record that an antibody was deployed. Optionally mark outcome (success/failure) to adjust strength.",
+    "feedback": "Mark antibody as correct (true) or false positive (false). Adjusts strength accordingly.",
+    "forget": "Remove a specific antibody by ID, or prune all weak (<0.15 strength) antibodies.",
+    "seed": "Auto-create antibodies from existing lesson history.",
+    "status": "Report all antibodies with domain breakdown, strength distribution, deployment stats."
+  },
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "immune",
+      "detect",
+      "pathogen",
+      "antibody",
+      "protect",
+      "failure pattern"
+    ],
+    "phases": [
+      "pre"
+    ],
+    "modes": [
+      "auto"
+    ]
+  }
+}

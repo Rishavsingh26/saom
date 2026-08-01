@@ -1,0 +1,35 @@
+{
+  "name": "curriculum",
+  "version": "1.0.0",
+  "description": "Curriculum learning system. Skill tree with 5 tracks, difficulty levels (1-9), prerequisites, and mastery tracking. Shows learning paths and unlock status.",
+  "language": "python",
+  "entrypoint": "memory/tools/curriculum/tool.py",
+  "commands": {
+    "path": "Show optimal learning path to reach a skill (prerequisites + target). Usage: path <skill_name>",
+    "unlock": "Check if prerequisites are met for a skill. Usage: unlock <skill_name>",
+    "progress": "Show mastery level per skill across all tracks",
+    "status": "Overall curriculum stats: mastery, unlocked, locked, difficulty range",
+    "tree": "Visual skill tree with mastery levels and lock indicators"
+  },
+  "created_at": "2026-07-07T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "curriculum",
+      "skill",
+      "learn",
+      "track",
+      "progress",
+      "mastery",
+      "prerequisite"
+    ],
+    "phases": [
+      "pre"
+    ],
+    "modes": [
+      "auto"
+    ]
+  }
+}

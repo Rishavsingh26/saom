@@ -1,0 +1,61 @@
+{
+  "name": "lesson-extractor",
+  "version": "1.0.0",
+  "description": "Parse a session interaction or task result and extract a structured lesson with root cause, fix, and severity.",
+  "language": "python",
+  "entrypoint": "tool.py",
+  "inputs": [
+    {
+      "name": "interaction_text",
+      "type": "string",
+      "description": "The task description, error output, or interaction to analyze"
+    },
+    {
+      "name": "outcome",
+      "type": "string",
+      "description": "success or failure"
+    },
+    {
+      "name": "session_id",
+      "type": "integer",
+      "description": "The session ID this lesson belongs to"
+    }
+  ],
+  "outputs": [
+    {
+      "name": "lesson",
+      "type": "json",
+      "description": "Structured lesson object with timestamp, summary, root_cause, fix, severity"
+    }
+  ],
+  "dependencies": [
+    "json",
+    "datetime"
+  ],
+  "created_at": "2026-07-05T00:00:00Z",
+  "last_used": null,
+  "success_count": 0,
+  "failure_count": 0,
+  "triggers": {
+    "keywords": [
+      "lesson",
+      "extract",
+      "learn",
+      "outcome",
+      "reflect",
+      "summary"
+    ],
+    "phases": [
+      "post"
+    ],
+    "modes": [
+      "auto"
+    ],
+    "dispatch_args": {
+      "mode": "auto",
+      "map": {
+        "task": "interaction_text"
+      }
+    }
+  }
+}

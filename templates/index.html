@@ -137,7 +137,6 @@ function saveSession(){
       }
     }catch(e){console.error('loadSession failed',e);}
   }
-  // Default greeting if no history
   addMsg('bot','Hey! I\'m SAOM v12. Ask me anything.','SAOM',true);
 })();
 
@@ -170,8 +169,10 @@ function addMsg(role,text,name,save){
   document.getElementById('messages').appendChild(d);
   scrollBottom();
 
+  var idx = -1;
   if(save){
     CONV_HISTORY.push({role:role,content:text,name:nm});
+    idx = CONV_HISTORY.length - 1;
     saveSession();
   }
 
@@ -179,7 +180,7 @@ function addMsg(role,text,name,save){
     attachActions(msgText);
   }
 
-  return {msgText:msgText, msgBody:msgBody};
+  return {msgText:msgText, msgBody:msgBody, historyIndex:idx};
 }
 
 function copyMsg(btn){
@@ -260,8 +261,8 @@ async function send(){
           if(c.chunk&&msgObj){
             fullText+=c.chunk;
             msgObj.msgBody.textContent=fullText;
-            if(CONV_HISTORY.length>0){
-              CONV_HISTORY[CONV_HISTORY.length-1].content=fullText;
+            if(msgObj.historyIndex>=0 && CONV_HISTORY[msgObj.historyIndex]){
+              CONV_HISTORY[msgObj.historyIndex].content=fullText;
               saveSession();
             }
             scrollBottom();
@@ -269,8 +270,8 @@ async function send(){
           if(c.done&&c.full&&msgObj){
             fullText=c.full;
             msgObj.msgBody.textContent=fullText;
-            if(CONV_HISTORY.length>0){
-              CONV_HISTORY[CONV_HISTORY.length-1].content=fullText;
+            if(msgObj.historyIndex>=0 && CONV_HISTORY[msgObj.historyIndex]){
+              CONV_HISTORY[msgObj.historyIndex].content=fullText;
               saveSession();
             }
             scrollBottom();
@@ -289,8 +290,8 @@ async function send(){
     if(msgObj && msgObj.msgText){
       msgObj.msgBody.textContent=fullText;
       attachActions(msgObj.msgText);
-      if(CONV_HISTORY.length>0){
-        CONV_HISTORY[CONV_HISTORY.length-1].content=fullText;
+      if(msgObj.historyIndex>=0 && CONV_HISTORY[msgObj.historyIndex]){
+        CONV_HISTORY[msgObj.historyIndex].content=fullText;
         saveSession();
       }
     }

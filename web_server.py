@@ -26,25 +26,7 @@ def add_to_history(sid, role, content):
         conversations[sid] = h[-MAX_HISTORY:]
 
 # ── System prompt (with auto tools) ──────────────────────────────
-SYSTEM_PROMPT = """You are SAOM (Super Agent Ouroboros Manager), built by Rishav Kumar. v11.0.0.
-
-YOU HAVE REAL TOOLS - use them automatically when needed:
-- When user asks about current events, news, or facts → output [TOOL:search:query]
-- When user shares a URL → output [TOOL:fetch:url]
-- For code execution → output [TOOL:python:code]
-- For shell commands → output [TOOL:shell:command]
-- For file reading → output [TOOL:read:path]
-
-TOOL FORMAT: [TOOL:toolname:argument]
-Example: [TOOL:search:current education minister india]
-
-RULES:
-- Be concise: 1-3 sentences max
-- ALWAYS use tools when needed - don't say "I can't search"
-- When you output a tool call, I will execute it and return results
-- Then you summarize the results for the user
-- Remember context from earlier in this conversation
-- If corrected, remember the correction"""
+SYSTEM_PROMPT = """You are SAOM v12, AI assistant by Rishav Kumar. Be concise. Code only unless asked."""
 
 # ── Multi-provider LLM (v12) ───────────────────────────────────
 import requests as _req
@@ -77,6 +59,7 @@ def _call_llm_stream(messages, max_tokens=500, temp=0.5):
                 data = r.json()
                 text = data.get("candidates", [{}])[0].get("content", {}).get("parts", [{}])[0].get("text", "")
                 if text:
+                    yield {"provider": f"{prov_name}/{model}"}
                     yield text
                     return
             elif prov_name == "groq":
@@ -88,6 +71,7 @@ def _call_llm_stream(messages, max_tokens=500, temp=0.5):
                     continue
                 text = r.json().get("choices", [{}])[0].get("message", {}).get("content", "")
                 if text:
+                    yield {"provider": f"{prov_name}/{model}"}
                     yield text
                     return
             else:
@@ -96,6 +80,7 @@ def _call_llm_stream(messages, max_tokens=500, temp=0.5):
                     headers={"Content-Type": "application/json", "User-Agent": "SAOM/12"}, stream=True, timeout=60)
                 if r.status_code != 200:
                     continue
+                yield {"provider": f"{prov_name}/{model}"}
                 full = ""
                 for line in r.iter_lines():
                     if not line:
@@ -453,6 +438,10 @@ def api_chat_stream():
         try:
             full = ""
             for chunk in _call_llm_stream(messages):
+                if isinstance(chunk, dict):
+                    # Provider info — send to client
+                    yield f"data: {json.dumps({'provider': chunk.get('provider', '')})}\n\n"
+                    continue
                 if "<tool_call>" in chunk or "function_call" in chunk:
                     continue
                 full += chunk

@@ -25,6 +25,8 @@
     <div id="sidebar">
       <h3>System</h3>
       <div id="sys-info">Loading...</div>
+      <h3>Active LLM</h3>
+      <div id="llm-info" style="color:#3fb950;font-weight:bold">north-mini-code-free</div>
       <h3>Memory</h3>
       <div id="mem-info">--</div>
       <h3>Tools</h3>
@@ -57,17 +59,7 @@
       <div id="chat-messages">
         <div class="msg assistant">
           <div class="msg-label">SAOM</div>
-          <div class="msg-body">Hey! I'm SAOM v11.0.0 - your self-improving AI assistant.
-
-I can:
-  Chat with AI (with memory)
-  search <query> - Web search (DuckDuckGo)
-  fetch <url> - Read webpage content
-  Read/write/edit files
-  Run Python code & shell commands
-  Execute SAOM tools & skills
-
-Type a command or ask me anything!</div>
+          <div class="msg-body">Hey! I'm SAOM v12.0.0. Ask me anything.</div>
         </div>
       </div>
       <div id="chat-input-area">
@@ -292,6 +284,9 @@ async function sendChat() {
         if (!line.startsWith('data: ')) continue;
         try {
           var chunk = JSON.parse(line.slice(6));
+          if (chunk.provider) {
+            document.getElementById('llm-info').textContent = chunk.provider;
+          }
           if (!started) {
             removeTyping();
             msgEl = addMsg('assistant', '');

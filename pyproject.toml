@@ -1,14 +1,18 @@
 [project]
 name = "saom"
-version = "9.4.0"
-description = "Super Agent Ouroboros Manager — self-improving cognitive architecture for LLM agents"
-authors = [{ name = "SAOM Contributors" }]
+version = "11.0.0"
+description = "SAOM - Self-improving AI agent with memory, tools, and multi-provider LLM"
+authors = [{ name = "Rishav Kumar" }]
 license = { text = "MIT" }
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 dependencies = [
-    "openai>=1.0.0",
+    "requests>=2.28.0",
 ]
+
+[project.optional-dependencies]
+web = ["flask>=3.0"]
+full = ["flask>=3.0", "sympy>=1.12"]
 
 [project.scripts]
 saom = "saom.cli:main"

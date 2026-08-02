@@ -1,6 +1,13 @@
 import json, os, sys
 
 BASE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# pulse.py and bridge.py (in saom/saom/, i.e. one level above this "memory" dir)
+# are the ones that actually read and write live session state, at
+# saom/saom/self.json. This used to read from BASE/"bridge"/"self.json"
+# (saom/saom/memory/bridge/self.json), a path nothing ever writes to, so
+# `status` always reported mode/session/confidence as null no matter what
+# pulse.py had recorded.
+SELF_JSON = os.path.join(os.path.dirname(BASE), "self.json")
 
 def load_json(path, default=None):
     if os.path.exists(path):
@@ -15,7 +22,7 @@ def get_compact_summary():
     init = load_json(os.path.join(BASE, "init.json"), {})
     reg = load_json(os.path.join(BASE, "tools", "registry.json"), {})
     skill_reg = load_json(os.path.join(BASE, "skills", "registry.json"), {})
-    self_data = load_json(os.path.join(BASE, "bridge", "self.json"), {})
+    self_data = load_json(SELF_JSON, {})
     nodes = load_json(os.path.join(BASE, "graph", "nodes.json"), [])
     edges = load_json(os.path.join(BASE, "graph", "edges.json"), [])
     lessons_path = os.path.join(BASE, "lessons", "lessons.jsonl")
@@ -60,7 +67,10 @@ def get_compact_summary():
         "lessons_total": lesson_count,
         "vault_entries": len(vault_data.get("secrets", [])),
         "dispatch_online": init.get("dispatch_available", False),
-        "current_session": self_data.get("session_id"),
+        # Bug fix: self.json (see pulse.py) has never had a "session_id" key —
+        # the live session number is tracked as "session_count". "current_session"
+        # here always came back None even when self_data was loaded correctly.
+        "current_session": self_data.get("session_count"),
         "current_mode": self_data.get("mode"),
         "current_confidence": self_data.get("confidence"),
         "crystallized_skills": init.get("crystallized_skills", []),

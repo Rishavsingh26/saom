@@ -10,6 +10,7 @@ Thumbs.db
 
 # SAOM memory — runtime data files only
 # (Python source files in these dirs ARE tracked)
+saom/self.json
 saom/memory/init.json
 saom/memory/bridge/self.json
 saom/memory/bridge/preferences.json

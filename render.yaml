@@ -3,7 +3,24 @@ services:
     name: saom-web
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app --no-sendfile --bind 0.0.0.0:$PORT
+    # Concurrency fix: the old command ("gunicorn wsgi:app" with no flags) runs
+    # gunicorn's default of 1 worker / 1 thread / 30s timeout. That means the
+    # WHOLE server can only handle one request at a time — a second user's
+    # request just queues (looks "stuck / blank") until the first finishes or
+    # gets killed by the 30s timeout, which a multi-round tool-calling chat
+    # can easily exceed.
+    #
+    # Fix uses --threads, not --workers: conversation history lives in an
+    # in-process Python dict (see web_server.py), not Redis/a DB. Multiple
+    # WORKERS are separate processes with separate memory, so Render's load
+    # balancer could route a user's next message to a worker that never saw
+    # their earlier messages -> history silently disappears mid-chat. A single
+    # worker with several threads shares one process's memory, giving real
+    # concurrency (this workload is I/O-bound — waiting on LLM APIs, web
+    # search, GitHub, PyPI — so threads help a lot here) without that problem.
+    # If you later move session storage to Redis/a DB, multiple workers become
+    # safe and you can scale --workers too.
+    startCommand: gunicorn wsgi:app --no-sendfile --bind 0.0.0.0:$PORT --workers 1 --threads 8 --worker-class gthread --timeout 120
     envVars:
       - key: GEMINI_API_KEY
         sync: false

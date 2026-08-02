@@ -26,7 +26,27 @@ def add_to_history(sid, role, content):
         conversations[sid] = h[-MAX_HISTORY:]
 
 # ── System prompt (with auto tools) ──────────────────────────────
-SYSTEM_PROMPT = """You are SAOM v12, AI assistant by Om. Be concise. Code only unless asked."""
+SYSTEM_PROMPT = """You are SAOM v12, AI assistant by Om. Be concise. Code only unless asked.
+
+You have tools for anything you don't already know or that changes over time:
+live scores, breaking/trending news, current events, prices, "latest"/"current"/
+"today" questions, or any fact you're not confident is still true right now.
+Never guess or make up numbers, scores, or dates for these — use a tool instead.
+
+To use a tool, reply with ONLY one tag, in exactly this format, and nothing else:
+  [TOOL:search:your query here]   general web search — snippets + links
+  [TOOL:news:your query here]     recent/trending news — dated articles, best for "what's happening with X"
+  [TOOL:fetch:https://...]        full text of one specific URL — use when a snippet isn't enough detail
+
+Rules:
+- Prefer search or news first. Only fetch a URL when you need more than the snippet gives you.
+- Use as few tool calls as it takes — usually one search is enough. Don't fetch every result.
+- After you see tool results, answer the user directly and concisely, citing the source
+  (e.g. "per ESPN Cricinfo" or "per Reuters").
+- If results are empty, outdated, or unclear, say so honestly rather than guessing.
+"""
+
+MAX_TOOL_ROUNDS = 3  # cap on search->fetch->search style chains per turn
 
 # ── Multi-provider LLM (v12) ───────────────────────────────────
 import requests as _req
@@ -185,6 +205,46 @@ def format_response(raw, stderr="", returncode=0):
     except (json.JSONDecodeError, ValueError):
         return raw
 
+# ── Web search / news / fetch helpers (shared by routes + tool calls) ──
+import html as _html_mod
+
+def _ddgs_text(query, max_results=5):
+    from ddgs import DDGS
+    results = DDGS().text(query, max_results=max_results)
+    return [f"{i}. {r.get('title', 'No title')}\n   {r.get('body', 'No description')}\n   {r.get('href', '')}"
+            for i, r in enumerate(results, 1)]
+
+def _ddgs_news(query, max_results=5):
+    """Recent/trending news — better suited than plain text search for things
+    like 'trending news', live scores, or anything time-sensitive, since
+    results come back dated and sourced."""
+    from ddgs import DDGS
+    results = DDGS().news(query, max_results=max_results)
+    out = []
+    for i, r in enumerate(results, 1):
+        out.append(f"{i}. {r.get('title', '')} ({r.get('date', '')})\n"
+                    f"   {r.get('body', '')}\n"
+                    f"   Source: {r.get('source', '')} \u2014 {r.get('url', '')}")
+    return out
+
+def _web_fetch(url, max_chars=5000):
+    try:
+        r = _req.get(url, headers={"User-Agent": "Mozilla/5.0 (compatible; SAOM/1.0)"},
+                      timeout=15, allow_redirects=True)
+        text = r.text
+        # Bug fix: previously only tags were stripped, so a <script>...</script> or
+        # <style>...</style> block's raw JS/CSS *content* survived into the "readable"
+        # text and got fed straight to the LLM/summary, degrading quality badly on
+        # most real news/sports sites. Strip those blocks (tag + content) first.
+        text = re.sub(r'<(script|style)[^>]*>.*?</\1>', ' ', text, flags=re.DOTALL | re.IGNORECASE)
+        text = re.sub(r'<[^>]+>', ' ', text)
+        text = _html_mod.unescape(text)  # &amp; &#39; &quot; etc. were left as-is before
+        text = re.sub(r'\s+', ' ', text).strip()
+        return {"content": text[:max_chars], "status": r.status_code, "url": url} if text else \
+               {"content": "", "status": r.status_code, "url": url, "error": "Empty page."}
+    except Exception as e:
+        return {"content": "", "status": None, "url": url, "error": str(e)}
+
 # ── Web search (DuckDuckGo, free) ────────────────────────────────
 @app.route("/api/web/search", methods=["POST"])
 def api_web_search():
@@ -194,11 +254,21 @@ def api_web_search():
     if not query:
         return jsonify({"error": "No query"}), 400
     try:
-        from ddgs import DDGS
-        results = DDGS().text(query, max_results=max_results)
-        formatted = []
-        for i, r in enumerate(results, 1):
-            formatted.append(f"{i}. {r.get('title', 'No title')}\n   {r.get('body', 'No description')}\n   {r.get('href', '')}")
+        formatted = _ddgs_text(query, max_results)
+        return jsonify({"results": formatted, "count": len(formatted), "query": query})
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+# ── Trending / recent news (DuckDuckGo, free) ────────────────────
+@app.route("/api/web/news", methods=["POST"])
+def api_web_news():
+    data = request.get_json() or {}
+    query = data.get("query", "")
+    max_results = data.get("max_results", 5)
+    if not query:
+        return jsonify({"error": "No query"}), 400
+    try:
+        formatted = _ddgs_news(query, max_results)
         return jsonify({"results": formatted, "count": len(formatted), "query": query})
     except Exception as e:
         return jsonify({"error": str(e)})
@@ -211,17 +281,8 @@ def api_web_fetch():
     max_chars = data.get("max_chars", 5000)
     if not url:
         return jsonify({"error": "No URL"}), 400
-    try:
-        import requests as req_lib
-        headers = {"User-Agent": "Mozilla/5.0 (compatible; SAOM/1.0)"}
-        r = req_lib.get(url, headers=headers, timeout=15, allow_redirects=True)
-        content = r.text[:max_chars]
-        # Simple HTML tag removal
-        clean = re.sub(r'<[^>]+>', ' ', content)
-        clean = re.sub(r'\s+', ' ', clean).strip()
-        return jsonify({"content": clean[:max_chars], "status": r.status_code, "url": url})
-    except Exception as e:
-        return jsonify({"error": str(e)})
+    result = _web_fetch(url, max_chars)
+    return jsonify(result)
 
 # ── File operations ──────────────────────────────────────────────
 @app.route("/api/file/read", methods=["POST"])
@@ -313,66 +374,39 @@ def api_run_shell():
     except Exception as e:
         return jsonify({"output": str(e), "returncode": -1})
 
-# ── Detect tool calls in message ─────────────────────────────────
+# ── Detect tool calls in message (explicit "search "/"news "/"fetch " commands) ──
 def detect_tool_call(message):
     msg = message.strip()
     if msg.lower().startswith("search "):
         return ("search", msg[7:].strip())
+    if msg.lower().startswith("news "):
+        return ("news", msg[5:].strip())
     if msg.lower().startswith("fetch "):
         return ("fetch", msg[6:].strip())
     return None
 
-def execute_tool(tool_name, arg):
-    if tool_name == "search":
-        try:
-            from ddgs import DDGS
-            results = DDGS().text(arg, max_results=5)
-            formatted = []
-            for i, r in enumerate(results, 1):
-                formatted.append(f"{i}. {r.get('title', '')}\n   {r.get('body', '')}\n   {r.get('href', '')}")
-            return "\n\n".join(formatted) if formatted else "No results found."
-        except Exception as e:
-            return f"Search error: {e}"
-    if tool_name == "fetch":
-        try:
-            import requests as req_lib
-            r = req_lib.get(arg, headers={"User-Agent": "SAOM/1.0"}, timeout=15)
-            content = re.sub(r'<[^>]+>', ' ', r.text)
-            content = re.sub(r'\s+', ' ', content).strip()
-            return content[:5000] if content else "Empty page."
-        except Exception as e:
-            return f"Fetch error: {e}"
-    return "Unknown tool."
-
-# ── Detect tool calls in LLM response ────────────────────────────
-import re
-
-def find_tool_calls(text):
-    """Find [TOOL:name:arg] patterns in text."""
-    pattern = r'\[TOOL:(\w+):([^\]]+)\]'
-    return re.findall(pattern, text)
-
 def execute_tool_call(tool_name, arg):
-    """Execute a tool call and return result."""
+    """Execute a tool call (from a user command or an LLM [TOOL:...] tag) and
+    return a plain-text result. search/news/fetch share the same underlying
+    helpers as the /api/web/* routes so there's one place that owns quality
+    (e.g. the fetch HTML-cleaning logic) instead of three copies drifting apart."""
     if tool_name == "search":
         try:
-            from ddgs import DDGS
-            results = DDGS().text(arg, max_results=5)
-            formatted = []
-            for i, r in enumerate(results, 1):
-                formatted.append(f"{i}. {r.get('title', '')}\n   {r.get('body', '')}\n   {r.get('href', '')}")
+            formatted = _ddgs_text(arg, max_results=5)
             return "\n\n".join(formatted) if formatted else "No results found."
         except Exception as e:
             return f"Search error: {e}"
-    if tool_name == "fetch":
+    if tool_name == "news":
         try:
-            import requests as req_lib
-            r = req_lib.get(arg, headers={"User-Agent": "SAOM/1.0"}, timeout=15)
-            content = re.sub(r'<[^>]+>', ' ', r.text)
-            content = re.sub(r'\s+', ' ', content).strip()
-            return content[:5000] if content else "Empty page."
+            formatted = _ddgs_news(arg, max_results=5)
+            return "\n\n".join(formatted) if formatted else "No news results found."
         except Exception as e:
-            return f"Fetch error: {e}"
+            return f"News search error: {e}"
+    if tool_name == "fetch":
+        result = _web_fetch(arg)
+        if result.get("error") and not result.get("content"):
+            return f"Fetch error: {result['error']}"
+        return result["content"]
     if tool_name == "python":
         try:
             r = subprocess.run([sys.executable, "-c", arg], capture_output=True, text=True, timeout=30)
@@ -392,6 +426,16 @@ def execute_tool_call(tool_name, arg):
         except Exception as e:
             return f"Read error: {e}"
     return f"Unknown tool: {tool_name}"
+
+# execute_tool (explicit user "search "/"news "/"fetch " commands) is the same
+# execution path as LLM-triggered [TOOL:...] tags.
+execute_tool = execute_tool_call
+
+# ── Detect tool calls in LLM response ────────────────────────────
+def find_tool_calls(text):
+    """Find [TOOL:name:arg] patterns in text."""
+    pattern = r'\[TOOL:(\w+):([^\]]+)\]'
+    return re.findall(pattern, text)
 
 # ── Streaming chat with auto tools ───────────────────────────────
 @app.route("/api/chat/stream", methods=["POST"])
@@ -443,27 +487,44 @@ def api_chat_stream():
         # Regular LLM chat with auto tool execution
         add_to_history(sid, "user", message)
         history = get_history(sid)
-        messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+        round_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
         for m in history:
-            messages.append({"role": m["role"], "content": m["content"]})
+            round_messages.append({"role": m["role"], "content": m["content"]})
 
         try:
-            full = ""
-            for chunk in _call_llm_stream(messages):
-                if isinstance(chunk, dict):
-                    # Provider info — send to client
-                    yield f"data: {json.dumps({'provider': chunk.get('provider', '')})}\n\n"
-                    continue
-                if "<tool_call>" in chunk or "function_call" in chunk:
-                    continue
-                full += chunk
-                yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+            final_full = None
+            for round_num in range(MAX_TOOL_ROUNDS):
+                full = ""
+                buf = ""              # holds text until we know if it's a [TOOL:...] tag
+                suppressed = None      # None=undecided, True=hide (tool tag), False=stream live
+                for chunk in _call_llm_stream(round_messages):
+                    if isinstance(chunk, dict):
+                        yield f"data: {json.dumps({'provider': chunk.get('provider', '')})}\n\n"
+                        continue
+                    full += chunk
+                    if suppressed is True:
+                        continue  # accumulating a tool tag silently, nothing to show yet
+                    if suppressed is False:
+                        yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
+                        continue
+                    # Undecided: buffer a few chars to see if this looks like [TOOL:...
+                    buf += chunk
+                    if buf.lstrip().startswith("[TOOL:"):
+                        suppressed = True
+                    elif len(buf) >= 8 or "\n" in buf:
+                        suppressed = False
+                        yield f"data: {json.dumps({'chunk': buf, 'done': False})}\n\n"
+                        buf = ""
+                if suppressed is None and buf:
+                    # Reply ended before we hit the decision threshold — flush it.
+                    yield f"data: {json.dumps({'chunk': buf, 'done': False})}\n\n"
 
-            # Check for tool calls in response
-            tool_calls = find_tool_calls(full)
-            if tool_calls:
+                tool_calls = find_tool_calls(full)
+                if not tool_calls:
+                    final_full = full
+                    break
+
                 yield f"data: {json.dumps({'chunk': '', 'done': False, 'tool': True})}\n\n"
-                # Execute each tool call
                 tool_results = []
                 for tool_name, tool_arg in tool_calls:
                     yield f"data: {json.dumps({'chunk': '', 'done': False, 'tool_status': f'Running {tool_name}...', 'tool_name': tool_name})}\n\n"
@@ -471,26 +532,22 @@ def api_chat_stream():
                     tool_results.append(f"[{tool_name} result]: {result}")
                     yield f"data: {json.dumps({'chunk': '', 'done': False, 'tool_status': f'{tool_name} done', 'tool_name': tool_name})}\n\n"
 
-                # Feed results back to LLM for summary
-                add_to_history(sid, "assistant", full)
-                add_to_history(sid, "user", "Tool results:\n" + "\n".join(tool_results))
-                messages2 = [{"role": "system", "content": "Summarize these tool results concisely for the user."}]
-                for m in get_history(sid)[-8:]:
-                    messages2.append({"role": m["role"], "content": m["content"]})
-                try:
-                    full2 = ""
-                    for chunk in _call_llm_stream(messages2):
-                        full2 += chunk
-                        yield f"data: {json.dumps({'chunk': chunk, 'done': False})}\n\n"
-                    if full2:
-                        add_to_history(sid, "assistant", full2)
-                    yield f"data: {json.dumps({'chunk': '', 'done': True, 'full': full2})}\n\n"
-                except Exception as e:
-                    yield f"data: {json.dumps({'chunk': '', 'done': True, 'full': full})}\n\n"
+                # Extend this turn's scratch context only — tool-result blobs
+                # aren't persisted into long-term session history, so a chatty
+                # search->fetch chain doesn't bloat every future turn's context.
+                round_messages = round_messages + [
+                    {"role": "assistant", "content": full},
+                    {"role": "user", "content": "Tool results:\n" + "\n\n".join(tool_results) +
+                        "\n\nAnswer the user now using these results. Only emit another "
+                        "[TOOL:...] tag if you genuinely still need more information."}
+                ]
             else:
-                if full:
-                    add_to_history(sid, "assistant", full)
-                yield f"data: {json.dumps({'chunk': '', 'done': True, 'full': full})}\n\n"
+                final_full = "I couldn't finish gathering results for that — try narrowing the question."
+                yield f"data: {json.dumps({'chunk': final_full, 'done': False})}\n\n"
+
+            if final_full:
+                add_to_history(sid, "assistant", final_full)
+            yield f"data: {json.dumps({'chunk': '', 'done': True, 'full': final_full or ''})}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'chunk': f'Error: {e}', 'done': True})}\n\n"
 
@@ -545,34 +602,37 @@ def api_chat():
     # LLM with memory + auto tools
     add_to_history(sid, "user", message)
     history = get_history(sid)
-    messages = [{"role": "system", "content": SYSTEM_PROMPT}]
+    round_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
     for m in history:
-        messages.append({"role": m["role"], "content": m["content"]})
+        round_messages.append({"role": m["role"], "content": m["content"]})
 
     try:
-        reply = _call_llm(messages)
-        reply = reply.encode("ascii", "replace").decode("ascii")
+        final_reply = None
+        for round_num in range(MAX_TOOL_ROUNDS):
+            reply = _call_llm(round_messages)
+            reply = reply.encode("ascii", "replace").decode("ascii")
 
-        # Check for tool calls
-        tool_calls = find_tool_calls(reply)
-        if tool_calls:
+            tool_calls = find_tool_calls(reply)
+            if not tool_calls:
+                final_reply = reply
+                break
+
             tool_results = []
             for tool_name, tool_arg in tool_calls:
                 result = execute_tool_call(tool_name, tool_arg)
                 tool_results.append(f"[{tool_name} result]: {result}")
-            # Feed results back to LLM
-            add_to_history(sid, "assistant", reply)
-            add_to_history(sid, "user", "Tool results:\n" + "\n".join(tool_results))
-            messages2 = [{"role": "system", "content": "Summarize these tool results concisely."}]
-            for m in get_history(sid)[-8:]:
-                messages2.append({"role": m["role"], "content": m["content"]})
-            reply2 = _call_llm(messages2)
-            reply2 = reply2.encode("ascii", "replace").decode("ascii")
-            add_to_history(sid, "assistant", reply2)
-            return jsonify({"response": reply2})
 
-        add_to_history(sid, "assistant", reply)
-        return jsonify({"response": reply})
+            round_messages = round_messages + [
+                {"role": "assistant", "content": reply},
+                {"role": "user", "content": "Tool results:\n" + "\n\n".join(tool_results) +
+                    "\n\nAnswer the user now using these results. Only emit another "
+                    "[TOOL:...] tag if you genuinely still need more information."}
+            ]
+        else:
+            final_reply = "I couldn't finish gathering results for that — try narrowing the question."
+
+        add_to_history(sid, "assistant", final_reply)
+        return jsonify({"response": final_reply})
     except Exception as e:
         return jsonify({"response": f"Error: {e}"})
 

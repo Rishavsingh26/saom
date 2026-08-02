@@ -10,20 +10,102 @@ MEMORY_DIR = Path.home() / ".saom" / "memory"
 app = Flask(__name__, template_folder=str(BASE_DIR / "templates"), static_folder=str(BASE_DIR / "static"))
 app.secret_key = os.urandom(24)
 
-# ── Conversation memory ──────────────────────────────────────────
-conversations = {}
-MAX_HISTORY = 20
+# ── Access control for dangerous endpoints ────────────────────────
+# /api/run/* and /api/file/* execute arbitrary shell/python and read/write
+# arbitrary files on this server. Previously nothing gated them at all — on
+# a public deployment (see render.yaml) anyone who found the URL could run
+# commands on the host. This key is opt-in (unset = old open behavior, so
+# local/dev use is unaffected) but should be set in production.
+_API_KEY = os.environ.get("SAOM_API_KEY", "")
+_PROTECTED_PREFIXES = ("/api/run", "/api/file")
+
+@app.before_request
+def _guard_dangerous_routes():
+    if _API_KEY and request.path.startswith(_PROTECTED_PREFIXES):
+        supplied = request.headers.get("X-API-Key") or \
+            request.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+        if supplied != _API_KEY:
+            return jsonify({"error": "Unauthorized — set the X-API-Key header. "
+                                      "(SAOM_API_KEY is configured on this server.)"}), 401
+
+# ── Conversation memory: bounded, token-aware, LRU-evicted ────────
+# Previously: a plain dict that grew forever (every session_id ever seen stayed
+# in memory for the life of the process — a real server-side memory leak), and
+# history sent to the LLM was just "last 20 messages" with no regard for how
+# large those messages actually were (a few big tool-result-era turns could
+# blow well past a small/free model's context window).
+from collections import OrderedDict
+
+conversations = OrderedDict()   # sid -> {"messages": [...], "summary": "", "summarized_through": 0, "last_active": ts}
+MAX_SESSIONS = 500              # hard cap on concurrent in-memory sessions
+KEEP_RECENT = 8                 # most recent messages always sent verbatim
+HISTORY_TOKEN_BUDGET = 3000     # soft budget (~tokens) for the verbatim tail
+
+def _approx_tokens(s):
+    return max(1, len(s) // 4)  # ~4 chars/token for English — good enough for budgeting, no tokenizer dep
+
+def _touch(sid):
+    conversations[sid]["last_active"] = time.time()
+    conversations.move_to_end(sid)
+    while len(conversations) > MAX_SESSIONS:
+        conversations.popitem(last=False)  # evict least-recently-used session
 
 def get_history(sid):
     if sid not in conversations:
-        conversations[sid] = []
-    return conversations[sid]
+        conversations[sid] = {"messages": [], "summary": "", "summarized_through": 0, "last_active": time.time()}
+    _touch(sid)
+    return conversations[sid]["messages"]
 
 def add_to_history(sid, role, content):
-    h = get_history(sid)
-    h.append({"role": role, "content": content})
-    if len(h) > MAX_HISTORY:
-        conversations[sid] = h[-MAX_HISTORY:]
+    get_history(sid)  # ensures session exists
+    conversations[sid]["messages"].append({"role": role, "content": content})
+    _touch(sid)
+
+def get_context_messages(sid):
+    """Build what actually gets sent to the LLM: a compact running summary of
+    anything older, plus the most recent turns verbatim, trimmed to a token
+    budget. Replaces resending the full raw history every single turn."""
+    sess = conversations.get(sid)
+    if not sess:
+        return []
+    msgs = sess["messages"]
+    older = msgs[:-KEEP_RECENT] if len(msgs) > KEEP_RECENT else []
+    recent = msgs[-KEEP_RECENT:] if len(msgs) > KEEP_RECENT else msgs
+
+    # Fold any newly-aged-out turns into the running summary once (not every
+    # turn) so older context is compacted rather than silently dropped.
+    new_to_summarize = older[sess["summarized_through"]:]
+    if new_to_summarize:
+        try:
+            summary_prompt = [
+                {"role": "system", "content": "Condense the following into a short factual summary "
+                                               "(2-4 sentences) of what's been discussed, for use as "
+                                               "background context. No preamble, just the summary."},
+                {"role": "user", "content": (sess["summary"] + "\n\n" if sess["summary"] else "") +
+                    "\n".join(f"{m['role']}: {m['content']}" for m in new_to_summarize)}
+            ]
+            new_summary = _call_llm(summary_prompt, max_tokens=150)
+            if new_summary and not new_summary.startswith("[Error]"):
+                sess["summary"] = new_summary.strip()
+                sess["summarized_through"] = len(older)
+        except Exception:
+            pass  # summarization failing isn't fatal — recent turns still go through raw
+
+    out = []
+    if sess["summary"]:
+        out.append({"role": "system", "content": f"Earlier in this conversation: {sess['summary']}"})
+
+    # Token-budget the verbatim tail too, in case any single message is huge
+    budget = HISTORY_TOKEN_BUDGET
+    trimmed = []
+    for m in reversed(recent):
+        t = _approx_tokens(m["content"])
+        if trimmed and budget - t < 0:
+            break
+        budget -= t
+        trimmed.append(m)
+    out.extend(reversed(trimmed))
+    return out
 
 # ── System prompt (with auto tools) ──────────────────────────────
 SYSTEM_PROMPT = """You are SAOM v12, AI assistant by Om. Be concise. Code only unless asked.
@@ -32,15 +114,25 @@ You have tools for anything you don't already know or that changes over time:
 live scores, breaking/trending news, current events, prices, "latest"/"current"/
 "today" questions, or any fact you're not confident is still true right now.
 Never guess or make up numbers, scores, or dates for these — use a tool instead.
+You also have a calculator and the current date/time — use them instead of doing
+arithmetic or guessing "today's date" in your head.
 
 To use a tool, reply with ONLY one tag, in exactly this format, and nothing else:
   [TOOL:search:your query here]   general web search — snippets + links
   [TOOL:news:your query here]     recent/trending news — dated articles, best for "what's happening with X"
   [TOOL:fetch:https://...]        full text of one specific URL — use when a snippet isn't enough detail
+  [TOOL:calc:2 * (3.5 + 7) ** 2]  exact arithmetic — numbers and + - * / // % ** ( ) only
+  [TOOL:datetime:]                current date/time in UTC — pass a timezone like [TOOL:datetime:Asia/Kolkata] for local time
+  [TOOL:unit:10 km to miles]      unit conversion — length, mass, volume, temperature
+  [TOOL:json:{"a": 1,}]           validate/pretty-print JSON and point out exactly what's wrong if it's invalid
+  [TOOL:regex:PATTERN:::TEXT]     test a regex pattern against text, list matches/groups
+  [TOOL:hash:sha256:::text]       md5/sha1/sha256/sha512 hex digest of text
+  [TOOL:base64:encode:::text]     base64 encode/decode (use "encode" or "decode" before :::)
+  [TOOL:pypi:requests]            look up a PyPI package's latest version, summary, license
 
 Rules:
 - Prefer search or news first. Only fetch a URL when you need more than the snippet gives you.
-- Use as few tool calls as it takes — usually one search is enough. Don't fetch every result.
+- Use as few tool calls as it takes — usually one is enough. Don't fetch every result.
 - After you see tool results, answer the user directly and concisely, citing the source
   (e.g. "per ESPN Cricinfo" or "per Reuters").
 - If results are empty, outdated, or unclear, say so honestly rather than guessing.
@@ -245,6 +337,191 @@ def _web_fetch(url, max_chars=5000):
     except Exception as e:
         return {"content": "", "status": None, "url": url, "error": str(e)}
 
+# ── Safe calculator (AST-restricted — NOT eval()) ─────────────────
+import ast, operator as _op
+
+_SAFE_MATH_OPS = {
+    ast.Add: _op.add, ast.Sub: _op.sub, ast.Mult: _op.mul, ast.Div: _op.truediv,
+    ast.FloorDiv: _op.floordiv, ast.Mod: _op.mod, ast.Pow: _op.pow,
+    ast.USub: _op.neg, ast.UAdd: _op.pos,
+}
+
+def _safe_eval_math(expr):
+    """Evaluate a pure arithmetic expression safely. Only numbers and
+    + - * / // % ** () are allowed — no names, no calls, no attribute access,
+    no imports. This is the standard 'don't use eval() on user/LLM input'
+    pattern: walk a parsed AST and only permit a small allowlist of nodes."""
+    def _walk(node):
+        if isinstance(node, ast.Expression):
+            return _walk(node.body)
+        if isinstance(node, ast.Constant):
+            if isinstance(node.value, (int, float)) and not isinstance(node.value, bool):
+                return node.value
+            raise ValueError("only numbers are allowed")
+        if isinstance(node, ast.BinOp) and type(node.op) in _SAFE_MATH_OPS:
+            return _SAFE_MATH_OPS[type(node.op)](_walk(node.left), _walk(node.right))
+        if isinstance(node, ast.UnaryOp) and type(node.op) in _SAFE_MATH_OPS:
+            return _SAFE_MATH_OPS[type(node.op)](_walk(node.operand))
+        raise ValueError("unsupported expression")
+    return _walk(ast.parse(expr, mode="eval"))
+
+# ── Date/time (LLMs often don't reliably know "today") ────────────
+def _tool_datetime(tz_name=""):
+    tz_name = (tz_name or "").strip()
+    try:
+        if tz_name and tz_name.lower() not in ("utc", "local"):
+            from zoneinfo import ZoneInfo
+            now = datetime.now(ZoneInfo(tz_name))
+            return now.strftime(f"%Y-%m-%d %H:%M:%S {tz_name} (%A)")
+        from datetime import timezone
+        now = datetime.now(timezone.utc)
+        return now.strftime("%Y-%m-%d %H:%M:%S UTC (%A)")
+    except Exception as e:
+        return f"Datetime error: {e} (use an IANA name like 'Asia/Kolkata' or 'America/New_York', or 'UTC')"
+
+# ── Unit conversion (chat-user staple: "10 km to miles", "98.6 F to C") ──
+_UNIT_ALIASES = {
+    "km": "kilometer", "kilometers": "kilometer", "kilometre": "kilometer", "kilometres": "kilometer",
+    "m": "meter", "meters": "meter", "metre": "meter", "metres": "meter",
+    "cm": "centimeter", "centimeters": "centimeter",
+    "mm": "millimeter", "millimeters": "millimeter",
+    "mi": "mile", "miles": "mile",
+    "yd": "yard", "yards": "yard",
+    "ft": "foot", "feet": "foot",
+    "in": "inch", "inches": "inch",
+    "kg": "kilogram", "kilograms": "kilogram", "kgs": "kilogram",
+    "g": "gram", "grams": "gram",
+    "lb": "pound", "lbs": "pound", "pounds": "pound",
+    "oz": "ounce", "ounces": "ounce",
+    "l": "liter", "liters": "liter", "litre": "liter", "litres": "liter",
+    "ml": "milliliter", "milliliters": "milliliter",
+    "gal": "gallon", "gallons": "gallon",
+    "cup": "cup", "cups": "cup",
+    "c": "celsius", "celsius": "celsius", "\u00b0c": "celsius",
+    "f": "fahrenheit", "fahrenheit": "fahrenheit", "\u00b0f": "fahrenheit",
+    "k": "kelvin", "kelvin": "kelvin",
+}
+# Everything expressed in a base unit per category (meters, kilograms, liters)
+_UNIT_TO_BASE = {
+    "kilometer": 1000.0, "meter": 1.0, "centimeter": 0.01, "millimeter": 0.001,
+    "mile": 1609.344, "yard": 0.9144, "foot": 0.3048, "inch": 0.0254,
+    "kilogram": 1000.0, "gram": 1.0, "pound": 453.59237, "ounce": 28.349523125,
+    "liter": 1.0, "milliliter": 0.001, "gallon": 3.785411784, "cup": 0.2365882365,
+}
+_UNIT_CATEGORY = {
+    "kilometer": "length", "meter": "length", "centimeter": "length", "millimeter": "length",
+    "mile": "length", "yard": "length", "foot": "length", "inch": "length",
+    "kilogram": "mass", "gram": "mass", "pound": "mass", "ounce": "mass",
+    "liter": "volume", "milliliter": "volume", "gallon": "volume", "cup": "volume",
+    "celsius": "temperature", "fahrenheit": "temperature", "kelvin": "temperature",
+}
+
+def _to_celsius(v, unit):
+    return v if unit == "celsius" else (v - 32) * 5 / 9 if unit == "fahrenheit" else v - 273.15
+
+def _from_celsius(v, unit):
+    return v if unit == "celsius" else v * 9 / 5 + 32 if unit == "fahrenheit" else v + 273.15
+
+def _tool_unit_convert(arg):
+    """Parses free-form 'VALUE UNIT to UNIT', e.g. '10 km to miles' or '98.6 f to c'."""
+    m = re.match(r'^\s*([\-\d.]+)\s*([a-zA-Z\u00b0]+)\s*(?:to|in|->|as)\s*([a-zA-Z\u00b0]+)\s*$',
+                 arg.strip(), re.IGNORECASE)
+    if not m:
+        return "Couldn't parse that — use 'VALUE UNIT to UNIT', e.g. '10 km to miles' or '98.6 F to C'."
+    value, from_u, to_u = m.groups()
+    from_key = _UNIT_ALIASES.get(from_u.lower())
+    to_key = _UNIT_ALIASES.get(to_u.lower())
+    if not from_key or not to_key:
+        unknown = from_u if not from_key else to_u
+        return f"Unknown unit '{unknown}'. Supported: length (km/m/cm/mm/mile/yard/foot/inch), " \
+               f"mass (kg/g/lb/oz), volume (l/ml/gallon/cup), temperature (C/F/K)."
+    if _UNIT_CATEGORY[from_key] != _UNIT_CATEGORY[to_key]:
+        return f"Can't convert {_UNIT_CATEGORY[from_key]} ({from_key}) to {_UNIT_CATEGORY[to_key]} ({to_key})."
+    value = float(value)
+    if _UNIT_CATEGORY[from_key] == "temperature":
+        result = _from_celsius(_to_celsius(value, from_key), to_key)
+    else:
+        result = value * _UNIT_TO_BASE[from_key] / _UNIT_TO_BASE[to_key]
+    result = round(result, 6)
+    if result == int(result):
+        result = int(result)
+    return f"{value} {from_key} = {result} {to_key}"
+
+# ── JSON validate/pretty-print (programmer staple) ─────────────────
+def _tool_json(arg):
+    try:
+        parsed = json.loads(arg)
+        return json.dumps(parsed, indent=2, ensure_ascii=False)
+    except json.JSONDecodeError as e:
+        return f"Invalid JSON: {e.msg} at line {e.lineno}, column {e.colno}"
+
+# ── Regex tester (programmer staple) ────────────────────────────────
+def _tool_regex(arg):
+    """Format: pattern:::text  (::: chosen since it won't collide with typical regex/text)"""
+    if ":::" not in arg:
+        return "Format: [TOOL:regex:PATTERN:::TEXT]"
+    pattern, text = arg.split(":::", 1)
+    try:
+        matches = list(re.finditer(pattern, text))
+        if not matches:
+            return "No matches."
+        lines = []
+        for i, m in enumerate(matches[:20], 1):
+            groups = f" groups={m.groups()}" if m.groups() else ""
+            lines.append(f"{i}. '{m.group(0)}' at [{m.start()}:{m.end()}]{groups}")
+        more = f"\n... and {len(matches) - 20} more" if len(matches) > 20 else ""
+        return "\n".join(lines) + more
+    except re.error as e:
+        return f"Invalid regex: {e}"
+
+# ── Hashing (programmer staple) ─────────────────────────────────────
+def _tool_hash(arg):
+    """Format: algorithm:::text, e.g. sha256:::hello world"""
+    import hashlib
+    if ":::" not in arg:
+        return "Format: [TOOL:hash:ALGORITHM:::TEXT] (md5, sha1, sha256, sha512)"
+    algo, text = arg.split(":::", 1)
+    algo = algo.strip().lower()
+    if algo not in ("md5", "sha1", "sha256", "sha512"):
+        return f"Unsupported algorithm '{algo}'. Use md5, sha1, sha256, or sha512."
+    return hashlib.new(algo, text.encode("utf-8")).hexdigest()
+
+# ── Base64 encode/decode (programmer staple) ────────────────────────
+def _tool_base64(arg):
+    """Format: encode:::text or decode:::text"""
+    import base64 as _b64
+    if ":::" not in arg:
+        return "Format: [TOOL:base64:encode:::TEXT] or [TOOL:base64:decode:::TEXT]"
+    mode, text = arg.split(":::", 1)
+    mode = mode.strip().lower()
+    try:
+        if mode == "encode":
+            return _b64.b64encode(text.encode("utf-8")).decode("ascii")
+        if mode == "decode":
+            return _b64.b64decode(text.encode("ascii")).decode("utf-8", errors="replace")
+        return "Mode must be 'encode' or 'decode'."
+    except Exception as e:
+        return f"Base64 error: {e}"
+
+# ── PyPI package lookup (programmer staple) ──────────────────────────
+def _tool_pypi(arg):
+    pkg = arg.strip()
+    if not pkg:
+        return "Give a package name, e.g. [TOOL:pypi:requests]"
+    try:
+        r = _req.get(f"https://pypi.org/pypi/{pkg}/json", timeout=10)
+        if r.status_code == 404:
+            return f"No PyPI package named '{pkg}'."
+        r.raise_for_status()
+        info = r.json().get("info", {})
+        return (f"{info.get('name')} {info.get('version')}\n"
+                f"{(info.get('summary') or '').strip()}\n"
+                f"License: {info.get('license') or 'unknown'}\n"
+                f"Homepage: {info.get('home_page') or info.get('project_url') or ''}\n"
+                f"Install: pip install {info.get('name')}")
+    except Exception as e:
+        return f"PyPI lookup error: {e}"
+
 # ── Web search (DuckDuckGo, free) ────────────────────────────────
 @app.route("/api/web/search", methods=["POST"])
 def api_web_search():
@@ -383,6 +660,22 @@ def detect_tool_call(message):
         return ("news", msg[5:].strip())
     if msg.lower().startswith("fetch "):
         return ("fetch", msg[6:].strip())
+    if msg.lower().startswith("calc "):
+        return ("calc", msg[5:].strip())
+    if msg.lower() in ("datetime", "time", "date") or msg.lower().startswith("datetime "):
+        return ("datetime", msg[9:].strip() if msg.lower().startswith("datetime ") else "")
+    if msg.lower().startswith("convert "):
+        return ("unit", msg[8:].strip())
+    if msg.lower().startswith("json "):
+        return ("json", msg[5:].strip())
+    if msg.lower().startswith("regex "):
+        return ("regex", msg[6:].strip())
+    if msg.lower().startswith("hash "):
+        return ("hash", msg[5:].strip())
+    if msg.lower().startswith("base64 "):
+        return ("base64", msg[7:].strip())
+    if msg.lower().startswith("pypi "):
+        return ("pypi", msg[5:].strip())
     return None
 
 def execute_tool_call(tool_name, arg):
@@ -407,6 +700,26 @@ def execute_tool_call(tool_name, arg):
         if result.get("error") and not result.get("content"):
             return f"Fetch error: {result['error']}"
         return result["content"]
+    if tool_name == "calc":
+        try:
+            result = _safe_eval_math(arg)
+            return str(result)
+        except Exception as e:
+            return f"Calc error: invalid expression ({e})"
+    if tool_name == "datetime":
+        return _tool_datetime(arg)
+    if tool_name == "unit":
+        return _tool_unit_convert(arg)
+    if tool_name == "json":
+        return _tool_json(arg)
+    if tool_name == "regex":
+        return _tool_regex(arg)
+    if tool_name == "hash":
+        return _tool_hash(arg)
+    if tool_name == "base64":
+        return _tool_base64(arg)
+    if tool_name == "pypi":
+        return _tool_pypi(arg)
     if tool_name == "python":
         try:
             r = subprocess.run([sys.executable, "-c", arg], capture_output=True, text=True, timeout=30)
@@ -433,8 +746,8 @@ execute_tool = execute_tool_call
 
 # ── Detect tool calls in LLM response ────────────────────────────
 def find_tool_calls(text):
-    """Find [TOOL:name:arg] patterns in text."""
-    pattern = r'\[TOOL:(\w+):([^\]]+)\]'
+    """Find [TOOL:name:arg] patterns in text. Arg may be empty (e.g. [TOOL:datetime:])."""
+    pattern = r'\[TOOL:(\w+):([^\]]*)\]'
     return re.findall(pattern, text)
 
 # ── Streaming chat with auto tools ───────────────────────────────
@@ -486,10 +799,7 @@ def api_chat_stream():
 
         # Regular LLM chat with auto tool execution
         add_to_history(sid, "user", message)
-        history = get_history(sid)
-        round_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-        for m in history:
-            round_messages.append({"role": m["role"], "content": m["content"]})
+        round_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + get_context_messages(sid)
 
         try:
             final_full = None
@@ -601,10 +911,7 @@ def api_chat():
 
     # LLM with memory + auto tools
     add_to_history(sid, "user", message)
-    history = get_history(sid)
-    round_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    for m in history:
-        round_messages.append({"role": m["role"], "content": m["content"]})
+    round_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + get_context_messages(sid)
 
     try:
         final_reply = None

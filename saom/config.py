@@ -10,7 +10,9 @@ def get_memory_dir():
 
 def ensure_memory():
     d = get_memory_dir()
-    for sub in ["bridge", "dashboard", "graph", "knowledge", "lessons", "rules", "sessions", "skills", "vault", "working"]:
+    for sub in ["bridge", "bridge/causal", "bridge/curiosity", "dashboard", "graph",
+                "knowledge", "lessons", "rules", "sessions", "skills", "vault",
+                "working", "tools"]:
         (d / sub).mkdir(parents=True, exist_ok=True)
     return d
 

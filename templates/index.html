@@ -161,6 +161,7 @@ async function handleFileUpload(file){
 
   var fd = new FormData();
   fd.append('file', file);
+  fd.append('session_id', SESSION);
   var uploadResp;
   try{
     var r = await fetch('/api/upload', {method:'POST', body: fd});
@@ -339,9 +340,27 @@ async function send(){
     var resp=await fetch('/api/chat/stream',{
       method:'POST',
       headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({message:msg,session_id:SESSION})
+      body:JSON.stringify({message:msg,session_id:SESSION,history:CONV_HISTORY.slice(-16)})
     });
-    
+
+    if(!resp.ok){
+      // Rate-limit (429), auth (401), or a server error all come back as a plain
+      // JSON body, not an SSE stream. Previously this fell straight into the
+      // stream-reading loop below, which silently skipped every non-"data: "
+      // line and surfaced nothing — the request visibly did nothing, which
+      // looked identical to "stuck" whether or not it was actually rate-limited.
+      var errText='Request failed (HTTP '+resp.status+').';
+      try{
+        var errJson=await resp.json();
+        if(errJson&&errJson.error) errText=errJson.error;
+      }catch(e){}
+      removeTyping();
+      addMsg('assistant',errText,'SAOM',true);
+      setStatus('ready','Ready');
+      WORKING=false;
+      return;
+    }
+
     var reader=resp.body.getReader(),dec=new TextDecoder(),buf='';
     while(true){
       var res=await reader.read();

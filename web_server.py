@@ -822,7 +822,7 @@ def _run_analysis_job(job_id):
             return
         job["status"] = "running"
         job["updated"] = time.time()
-        code, ext, filename = job["code"], job["ext"], job["filename"]
+        code, ext, filename, sid = job["code"], job["ext"], job["filename"], job["session_id"]
 
     lint_result = _static_lint(code, ext)
     prompt = [
@@ -839,6 +839,18 @@ def _run_analysis_job(job_id):
     ]
     try:
         reply = _call_llm(prompt, max_tokens=4000)
+        # Bug fix: _call_llm returns "[Error] All LLM providers failed..." as a normal
+        # string on total provider failure — it doesn't raise. The old code treated that
+        # string as if it were a real review: no fenced block matched, so fixed_code fell
+        # back to `code` (the untouched original) and the whole error text became the
+        # "bugs report" — reported as status="done" with a "Download fixed file" button
+        # that silently handed back the unmodified original file. Catch that explicitly.
+        if reply.strip().startswith("[Error]"):
+            with _JOBS_LOCK:
+                job = _jobs.get(job_id)
+                if job:
+                    job.update(status="error", error=reply.strip(), lint_result=lint_result, updated=time.time())
+            return
         blocks = re.findall(r'```[a-zA-Z0-9_+-]*\n(.*?)```', reply, re.DOTALL)
         fixed_code = blocks[-1].rstrip("\n") if blocks else code
         bugs_section = reply.split("## Fixed code")[0].strip() if "## Fixed code" in reply else reply
@@ -847,6 +859,15 @@ def _run_analysis_job(job_id):
             if job:
                 job.update(status="done", bugs_report=bugs_section, fixed_code=fixed_code,
                            lint_result=lint_result, updated=time.time())
+
+        # Bug fix: upload/analyze ran entirely outside the chat's real memory — a
+        # follow-up like "fix this code" had nothing to refer to, since the backend
+        # session never saw the file, only a client-side cosmetic "Uploaded X" bubble.
+        # Inject the actual code (capped) and the review into real session history so
+        # follow-up messages in the same session can reference it naturally.
+        code_excerpt = code if len(code) <= 4000 else code[:4000] + "\n... (truncated)"
+        add_to_history(sid, "user", f"[Uploaded {filename} for review]\n```{ext.lstrip('.')}\n{code_excerpt}\n```")
+        add_to_history(sid, "assistant", bugs_section)
     except Exception as e:
         with _JOBS_LOCK:
             job = _jobs.get(job_id)
@@ -858,6 +879,7 @@ def api_upload():
     f = request.files.get("file")
     if not f or not f.filename:
         return jsonify({"error": "No file uploaded"}), 400
+    sid = request.form.get("session_id", "default")
     ext = Path(f.filename).suffix.lower()
     if ext not in ALLOWED_UPLOAD_EXTENSIONS:
         return jsonify({"error": f"Unsupported file type '{ext}'. Allowed: "
@@ -873,7 +895,7 @@ def api_upload():
     job_id = uuid.uuid4().hex
     now = time.time()
     with _JOBS_LOCK:
-        _jobs[job_id] = {"status": "queued", "filename": f.filename, "ext": ext,
+        _jobs[job_id] = {"status": "queued", "filename": f.filename, "ext": ext, "session_id": sid,
                           "language": ALLOWED_UPLOAD_EXTENSIONS[ext], "code": code,
                           "bugs_report": "", "fixed_code": "", "lint_result": "", "error": "",
                           "created": now, "updated": now}

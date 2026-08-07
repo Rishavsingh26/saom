@@ -161,6 +161,7 @@ async function handleFileUpload(file){
 
   var fd = new FormData();
   fd.append('file', file);
+  fd.append('session_id', SESSION);
   var uploadResp;
   try{
     var r = await fetch('/api/upload', {method:'POST', body: fd});

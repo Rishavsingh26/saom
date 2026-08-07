@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>SAOM</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0a0a;--surface:#111;--surface2:#1a1a1a;--surface3:#222;--border:#2a2a2a;--text:#e5e5e5;--text2:#888;--text3:#555;--accent:#6366f1;--user:#6366f1;--bot:#141414;--green:#22c55e}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);height:100dvh;overflow:hidden}
+#app{display:flex;flex-direction:column;height:100dvh;max-width:800px;margin:0 auto;position:relative}
+
+header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:rgba(10,10,10,0.85);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);flex-shrink:0;position:sticky;top:0;z-index:10}
+.logo{display:flex;align-items:center;gap:8px}
+.logo svg{width:24px;height:24px}
+.logo span{font-weight:600;font-size:15px}
+.status{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--text2)}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--green);flex-shrink:0}
+.dot.loading{animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.llm-badge{font-size:10px;padding:2px 8px;border-radius:10px;background:var(--surface3);color:var(--text2);border:1px solid var(--border);cursor:default;transition:background .2s}
+.llm-badge:hover{background:var(--border)}
+.header-actions{display:flex;align-items:center;gap:8px}
+.icon-btn{background:none;border:none;color:var(--text2);cursor:pointer;padding:4px;border-radius:6px;display:flex;align-items:center;justify-content:center;transition:background .2s}
+.icon-btn:hover{background:var(--surface3)}
+.icon-btn svg{width:16px;height:16px}
+#upload-btn{flex-shrink:0;padding:8px;margin-bottom:2px}
+
+#messages{flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:16px;scroll-behavior:smooth}
+.msg{display:flex;gap:10px;max-width:100%;animation:fadeIn .2s ease;position:relative}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.avatar{width:28px;height:28px;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;flex-shrink:0}
+.avatar.user{background:var(--accent);color:#fff}
+.avatar.bot{background:var(--surface3);color:var(--text2)}
+.msg-content{flex:1;min-width:0}
+.msg-name{font-size:11px;font-weight:600;margin-bottom:4px;color:var(--text2)}
+.msg-text{font-size:14px;line-height:1.65;padding:10px 14px;background:var(--bot);border-radius:12px 12px 12px 4px;position:relative;min-height:20px}
+.msg.user .msg-text{background:var(--accent);color:#fff;border-radius:12px 12px 4px 12px}
+.msg-body{white-space:pre-wrap;word-break:break-word}
+.msg-text code{background:rgba(0,0,0,0.3);padding:1px 5px;border-radius:3px;font-size:13px;font-family:'SF Mono',Consolas,monospace}
+.msg-text pre{background:rgba(0,0,0,0.4);border:1px solid var(--border);border-radius:8px;padding:12px;margin:8px 0;overflow-x:auto}
+.msg-text pre code{background:none;padding:0}
+.msg-time{font-size:10px;color:var(--text3);margin-top:4px;opacity:.7}
+
+.msg-actions{display:flex;align-items:center;justify-content:space-between;margin-top:8px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.06);gap:8px}
+.copy-btn{background:none;border:none;color:var(--text2);cursor:pointer;padding:2px 6px;border-radius:4px;font-size:11px;display:inline-flex;align-items:center;gap:4px;transition:all .2s;opacity:0.8}
+.copy-btn:hover{background:var(--surface3);color:var(--text);opacity:1}
+.msg.user .msg-actions{border-top-color:rgba(255,255,255,0.18)}
+.msg.user .copy-btn{color:rgba(255,255,255,0.75)}
+.msg.user .copy-btn:hover{background:rgba(255,255,255,0.15);color:#fff}
+.msg-feedback{display:flex;gap:4px;margin-left:auto}
+.feedback-btn{background:none;border:none;color:var(--text3);cursor:pointer;padding:2px 4px;border-radius:4px;display:inline-flex;align-items:center;justify-content:center;transition:all .2s}
+.feedback-btn:hover{color:var(--accent)}
+.feedback-btn.active{color:var(--accent)}
+
+.cursor{display:inline-block;width:2px;height:14px;background:var(--accent);margin-left:2px;animation:blink 1s infinite;vertical-align:text-bottom}
+@keyframes blink{0%,50%{opacity:1}51%,100%{opacity:0}}
+
+.typing{display:flex;gap:4px;padding:8px 0}
+.typing span{width:5px;height:5px;background:var(--text2);border-radius:50%;animation:bounce 1.4s infinite ease-in-out}
+.typing span:nth-child(2){animation-delay:.2s}
+.typing span:nth-child(3){animation-delay:.4s}
+@keyframes bounce{0%,80%,100%{transform:scale(.5);opacity:.3}40%{transform:scale(1);opacity:1}}
+
+#input-area{padding:12px 16px;border-top:1px solid var(--border);background:rgba(10,10,10,0.9);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);flex-shrink:0}
+#input-wrap{display:flex;align-items:flex-end;gap:8px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:8px 12px;transition:border-color .2s}
+#input-wrap:focus-within{border-color:var(--accent)}
+#chat-input{flex:1;background:none;border:none;color:var(--text);font-size:14px;font-family:inherit;outline:none;resize:none;max-height:120px}
+#chat-input::placeholder{color:var(--text3)}
+#send-btn{width:32px;height:32px;border-radius:8px;border:none;background:var(--accent);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:opacity .2s,transform .1s}
+#send-btn:hover{transform:scale(1.05)}
+#send-btn:disabled{opacity:.3;cursor:not-allowed;transform:none}
+#send-btn svg{width:16px;height:16px}
+
+footer{padding:8px 16px;text-align:center;font-size:10px;color:var(--text3);border-top:1px solid var(--border);flex-shrink:0}
+
+@media(max-width:640px){
+  #app{max-width:100%}
+  header{padding:10px 12px}
+  #messages{padding:12px;gap:12px}
+  #input-area{padding:8px 12px}
+  .avatar{width:24px;height:24px;font-size:10px}
+  .msg-text{font-size:13px;padding:8px 10px}
+  .msg-content .msg-name{font-size:10px}
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M8 12h8M12 8v8"/></svg>
+      <span>SAOM</span>
+    </div>
+    <div class="header-actions">
+      <span class="llm-badge" id="llm">north-mini-code-free</span>
+      <button class="icon-btn" id="clear-btn" title="Clear chat">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14"/></svg>
+      </button>
+      <div class="status"><span class="dot" id="dot"></span><span id="status-text">Ready</span></div>
+    </div>
+  </header>
+  <div id="messages"></div>
+  <div id="input-area">
+    <div id="input-wrap">
+      <input type="file" id="file-input" accept=".py,.php,.html,.htm,.js,.jsx,.ts,.tsx,.java,.go,.rb,.c,.cpp,.h,.cs,.css,.sql,.sh,.json" style="display:none" onchange="handleFileUpload(this.files[0])">
+      <button id="upload-btn" class="icon-btn" title="Upload a code file to find bugs" onclick="document.getElementById('file-input').click()">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/></svg>
+      </button>
+      <textarea id="chat-input" rows="1" placeholder="Message SAOM..." onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+      <button id="send-btn" onclick="send()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4z"/></svg></button>
+    </div>
+  </div>
+  <footer>SAOM v12 by Om</footer>
+</div>
+<script>
+var SESSION='s'+Date.now(),WORKING=false;
+var CONV_HISTORY=[];
+var MAX_HISTORY=20;
+
+function saveSession(){
+  try{
+    localStorage.setItem('saom_session',JSON.stringify({
+      sessionId:SESSION,
+      history:CONV_HISTORY.slice(-MAX_HISTORY)
+    }));
+  }catch(e){console.error('saveSession failed',e);}
+}
+
+// Restore session or show default greeting
+(function(){
+  var saved=localStorage.getItem('saom_session');
+  if(saved){
+    try{
+      var data=JSON.parse(saved);
+      if(data&&data.history&&data.history.length>0){
+        CONV_HISTORY=data.history;
+        SESSION=data.sessionId||SESSION;
+        for(var i=0;i<data.history.length;i++){
+          var h=data.history[i];
+          addMsg(h.role,h.content,h.name,false);
+        }
+        scrollBottom();
+        return;
+      }
+    }catch(e){console.error('loadSession failed',e);}
+  }
+  addMsg('bot','Hey! I\'m SAOM v12. Ask me anything.','SAOM',true);
+})();
+
+function handleKey(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()}}
+function autoResize(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,120)+'px'}
+
+async function handleFileUpload(file){
+  if(!file) return;
+  document.getElementById('file-input').value='';  // allow re-selecting the same file later
+
+  addMsg('user', 'Uploaded '+file.name+' for review', 'You', true);
+  var msgObj = addMsg('assistant', 'Uploading\u2026', 'SAOM', true);
+  setStatus('working','Analyzing file');
+
+  var fd = new FormData();
+  fd.append('file', file);
+  var uploadResp;
+  try{
+    var r = await fetch('/api/upload', {method:'POST', body: fd});
+    uploadResp = await r.json();
+    if(!r.ok || uploadResp.error){
+      msgObj.msgBody.innerHTML = renderRichText('Upload failed: ' + (uploadResp.error || r.status));
+      setStatus('ready','Ready');
+      return;
+    }
+  }catch(e){
+    msgObj.msgBody.innerHTML = renderRichText('Upload failed: ' + e.message);
+    setStatus('ready','Ready');
+    return;
+  }
+
+  msgObj.msgBody.innerHTML = renderRichText(
+    'Reviewing ' + uploadResp.filename + ' (' + uploadResp.language + ', ' + uploadResp.size + ' bytes)\u2026 this can take a bit for a full review.');
+
+  var jobId = uploadResp.job_id, tries = 0, maxTries = 180;  // up to ~3 min of polling
+  var poll = async function(){
+    tries++;
+    var statusResp;
+    try{
+      var sr = await fetch('/api/analyze/' + jobId);
+      statusResp = await sr.json();
+    }catch(e){
+      msgObj.msgBody.innerHTML = renderRichText('Lost connection while checking analysis status: ' + e.message);
+      setStatus('ready','Ready');
+      return;
+    }
+    if(statusResp.status === 'done'){
+      var reportText = 'Review of ' + uploadResp.filename + ':\n\n' + statusResp.bugs_report;
+      var html = renderRichText(reportText);
+      if(statusResp.has_fixed_code){
+        html += '<div style="margin-top:10px"><a href="/api/download/' + jobId + '" download ' +
+                'style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:var(--accent);' +
+                'color:#fff;border-radius:8px;text-decoration:none;font-size:13px">\u2b07 Download fixed file</a></div>';
+        reportText += '\n\n[Download link available for 2 hours after analysis \u2014 re-upload if it expires]';
+      }
+      msgObj.msgBody.innerHTML = html;
+      if(msgObj.historyIndex>=0 && CONV_HISTORY[msgObj.historyIndex]){
+        CONV_HISTORY[msgObj.historyIndex].content = reportText;
+        saveSession();
+      }
+      attachActions(msgObj.msgText, 'assistant');
+      setStatus('ready','Ready');
+      scrollBottom();
+      return;
+    }
+    if(statusResp.status === 'error'){
+      msgObj.msgBody.innerHTML = renderRichText('Analysis failed: ' + (statusResp.error || 'unknown error'));
+      setStatus('ready','Ready');
+      return;
+    }
+    if(tries >= maxTries){
+      msgObj.msgBody.innerHTML = renderRichText('Still running \u2014 this is taking longer than expected. Try again shortly.');
+      setStatus('ready','Ready');
+      return;
+    }
+    setTimeout(poll, 1000);
+  };
+  poll();
+}
+
+function setStatus(s,t){document.getElementById('dot').className='dot'+(s==='working'?' loading':'');document.getElementById('status-text').textContent=t}
+function scrollBottom(){var m=document.getElementById('messages');m.scrollTop=m.scrollHeight}
+
+function attachActions(msgTextEl,role){
+  if(msgTextEl.querySelector('.msg-actions')) return;
+  var actions=document.createElement('div');
+  actions.className='msg-actions';
+  var html='<button class="copy-btn" onclick="copyMsg(this)" title="Copy text"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg><span>Copy</span></button>';
+  // Feedback (helpful/not helpful) only makes sense on the assistant's replies,
+  // not on the user's own message bubble.
+  if(role!=='user'){
+    html+='<div class="msg-feedback"><button class="feedback-btn" onclick="feedback(this,1)" title="Helpful"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3zM7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg></button><button class="feedback-btn" onclick="feedback(this,0)" title="Not helpful"><svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 15v4a3 3 0 003 3l4-9V2H5.72a2 2 0 00-2 1.7l-1.38 9a2 2 0 002 2.3zm7-13h3a2 2 0 012 2v7a2 2 0 01-2 2h-3"/></svg></button></div>';
+  }
+  actions.innerHTML=html;
+  msgTextEl.appendChild(actions);
+}
+
+// Minimal, safe markdown-ish rendering: escapes HTML first (so nothing the
+// model or user typed can inject markup), then turns ```code fences```,
+// `inline code`, and **bold** into real elements. The CSS already has
+// .msg-text pre/code rules defined but nothing used to actually produce
+// <pre>/<code> elements — messages were always plain text.
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function renderRichText(text){
+  var out=escapeHtml(text);
+  out=out.replace(/```[a-zA-Z0-9_+-]*\n?([\s\S]*?)```/g,function(m,code){
+    return '<pre><code>'+code.replace(/\n$/,'')+'</code></pre>';
+  });
+  out=out.replace(/`([^`\n]+)`/g,'<code>$1</code>');
+  out=out.replace(/\*\*([^*\n]+)\*\*/g,'<strong>$1</strong>');
+  return out;
+}
+
+function addMsg(role,text,name,save){
+  if(save===undefined) save=true;
+  var d=document.createElement('div');
+  d.className='msg '+(role==='user'?'user':'');
+  var av=role==='user'?'<div class="avatar user">Y</div>':'<div class="avatar bot">O</div>';
+  var nm=name||(role==='user'?'You':'SAOM');
+  
+  d.innerHTML=av+'<div class="msg-content"><div class="msg-name">'+nm+'</div><div class="msg-text"><div class="msg-body"></div></div><div class="msg-time">'+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})+'</div></div>';
+  
+  var msgText=d.querySelector('.msg-text');
+  var msgBody=d.querySelector('.msg-body');
+  msgBody.innerHTML=renderRichText(text);
+
+  document.getElementById('messages').appendChild(d);
+  scrollBottom();
+
+  var idx = -1;
+  if(save){
+    CONV_HISTORY.push({role:role,content:text,name:nm});
+    idx = CONV_HISTORY.length - 1;
+    saveSession();
+  }
+
+  if(text && text.length>0){
+    attachActions(msgText,role);
+  }
+
+  return {msgText:msgText, msgBody:msgBody, historyIndex:idx};
+}
+
+function copyMsg(btn){
+  var msgText=btn.closest('.msg-text');
+  var msgBody=msgText?msgText.querySelector('.msg-body'):null;
+  var text=msgBody?msgBody.textContent:'';
+  var label=btn.querySelector('span');
+  
+  navigator.clipboard.writeText(text).then(function(){
+    if(label) label.textContent='Copied!';
+    setTimeout(function(){ if(label) label.textContent='Copy'; },1500);
+  }).catch(function(){
+    if(label) label.textContent='Failed';
+    setTimeout(function(){ if(label) label.textContent='Copy'; },1500);
+  });
+}
+
+function feedback(btn,liked){
+  btn.classList.add('active');
+  setTimeout(function(){btn.classList.remove('active')},1000);
+}
+
+function showTyping(){
+  var d=document.createElement('div');d.className='msg';d.id='typing-msg';
+  d.innerHTML='<div class="avatar bot">O</div><div class="msg-content"><div class="msg-name">SAOM</div><div class="typing"><span></span><span></span><span></span></div></div>';
+  document.getElementById('messages').appendChild(d);scrollBottom();
+}
+function removeTyping(){var e=document.getElementById('typing-msg');if(e)e.remove()}
+
+function clearChat(){
+  CONV_HISTORY=[];
+  document.getElementById('messages').innerHTML='';
+  addMsg('bot','Hey! I\'m SAOM v12. Ask me anything.','SAOM',true);
+  saveSession();
+}
+document.getElementById('clear-btn').addEventListener('click',clearChat);
+
+async function send(){
+  var input=document.getElementById('chat-input');
+  var msg=input.value.trim();
+  if(!msg||WORKING)return;
+  input.value='';input.style.height='auto';
+  
+  addMsg('user',msg);
+  WORKING=true;showTyping();setStatus('working','Thinking...');
+
+  var msgObj=null,started=false,fullText='';
+  try{
+    var resp=await fetch('/api/chat/stream',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({message:msg,session_id:SESSION,history:CONV_HISTORY.slice(-16)})
+    });
+
+    if(!resp.ok){
+      // Rate-limit (429), auth (401), or a server error all come back as a plain
+      // JSON body, not an SSE stream. Previously this fell straight into the
+      // stream-reading loop below, which silently skipped every non-"data: "
+      // line and surfaced nothing — the request visibly did nothing, which
+      // looked identical to "stuck" whether or not it was actually rate-limited.
+      var errText='Request failed (HTTP '+resp.status+').';
+      try{
+        var errJson=await resp.json();
+        if(errJson&&errJson.error) errText=errJson.error;
+      }catch(e){}
+      removeTyping();
+      addMsg('assistant',errText,'SAOM',true);
+      setStatus('ready','Ready');
+      WORKING=false;
+      return;
+    }
+
+    var reader=resp.body.getReader(),dec=new TextDecoder(),buf='';
+    while(true){
+      var res=await reader.read();
+      if(res.done) break;
+      buf+=dec.decode(res.value,{stream:true});
+      var lines=buf.split('\n');
+      buf=lines.pop();
+      
+      for(var i=0;i<lines.length;i++){
+        var line=lines[i];
+        if(!line.startsWith('data: '))continue;
+        try{
+          var c=JSON.parse(line.slice(6));
+          if(c.provider){
+            document.getElementById('llm').textContent=c.provider;
+            continue;
+          }
+          if(!started){
+            removeTyping();
+            msgObj=addMsg('assistant','','SAOM',true);
+            started=true;
+            setStatus('working','Generating...');
+          }
+          if(c.chunk&&msgObj){
+            fullText+=c.chunk;
+            msgObj.msgBody.textContent=fullText;
+            if(msgObj.historyIndex>=0 && CONV_HISTORY[msgObj.historyIndex]){
+              CONV_HISTORY[msgObj.historyIndex].content=fullText;
+              saveSession();
+            }
+            scrollBottom();
+          }
+          if(c.done&&c.full&&msgObj){
+            fullText=c.full;
+            msgObj.msgBody.innerHTML=renderRichText(fullText);
+            if(msgObj.historyIndex>=0 && CONV_HISTORY[msgObj.historyIndex]){
+              CONV_HISTORY[msgObj.historyIndex].content=fullText;
+              saveSession();
+            }
+            scrollBottom();
+          }
+        }catch(e){}
+      }
+    }
+    
+    if(!started){
+      removeTyping();
+      msgObj=addMsg('assistant','No response','SAOM',true);
+      fullText='No response';
+    }
+    
+    // STREAMING CLOSED -> Attach Copy/Feedback actions & update saved history
+    if(msgObj && msgObj.msgText){
+      msgObj.msgBody.innerHTML=renderRichText(fullText);
+      attachActions(msgObj.msgText,'assistant');
+      if(msgObj.historyIndex>=0 && CONV_HISTORY[msgObj.historyIndex]){
+        CONV_HISTORY[msgObj.historyIndex].content=fullText;
+        saveSession();
+      }
+    }
+    setStatus('ready','Ready');
+  }catch(e){
+    removeTyping();
+    addMsg('assistant','Error: '+e.message);
+    setStatus('ready','Ready');
+  }
+  WORKING=false;
+}
+</script>
+</body>
+</html>

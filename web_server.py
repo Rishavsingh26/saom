@@ -1,7 +1,7 @@
-import json, os, subprocess, sys, re, threading, time, platform
+import json, os, subprocess, sys, re, threading, time, platform, uuid, io
 from datetime import datetime
 from pathlib import Path
-from flask import Flask, request, jsonify, render_template, Response, stream_with_context
+from flask import Flask, request, jsonify, render_template, Response, stream_with_context, send_file
 
 BASE_DIR = Path(__file__).parent
 SAOM_DIR = BASE_DIR / "saom"
@@ -28,6 +28,48 @@ def _guard_dangerous_routes():
             return jsonify({"error": "Unauthorized — set the X-API-Key header. "
                                       "(SAOM_API_KEY is configured on this server.)"}), 401
 
+# ── Basic per-client rate limiting ────────────────────────────────
+# Now that the server can genuinely run requests concurrently (see render.yaml),
+# nothing stops one client from firing dozens of chat/upload requests at once
+# and starving everyone else's share of the thread pool. Simple in-process
+# sliding-window limiter — no external dependency, good enough for a single
+# gunicorn process; would need a shared store (Redis) if this ever runs across
+# multiple worker processes.
+_RATE_LIMITED_PREFIXES = ("/api/chat", "/api/upload", "/api/web/", "/api/run", "/api/github")
+_RATE_LIMIT_MAX = 20        # requests
+_RATE_LIMIT_WINDOW = 60     # seconds
+_rate_lock = threading.Lock()
+_rate_buckets = {}          # client_key -> [timestamps]
+
+def _rate_limit_key():
+    # Prefer an explicit session id (works across proxies/shared IPs) if the
+    # client sent one, otherwise fall back to remote address.
+    sid = None
+    if request.is_json:
+        sid = (request.get_json(silent=True) or {}).get("session_id")
+    return sid or request.headers.get("X-Forwarded-For", request.remote_addr or "unknown")
+
+@app.before_request
+def _rate_limit():
+    if not request.path.startswith(_RATE_LIMITED_PREFIXES):
+        return
+    key = _rate_limit_key()
+    now = time.time()
+    with _rate_lock:
+        bucket = [t for t in _rate_buckets.get(key, []) if now - t < _RATE_LIMIT_WINDOW]
+        if len(bucket) >= _RATE_LIMIT_MAX:
+            _rate_buckets[key] = bucket
+            return jsonify({"error": f"Rate limit: max {_RATE_LIMIT_MAX} requests per "
+                                      f"{_RATE_LIMIT_WINDOW}s. Try again shortly."}), 429
+        bucket.append(now)
+        _rate_buckets[key] = bucket
+
+# ── Health check (uptime monitors, Render health checks) ──────────
+@app.route("/api/health")
+def api_health():
+    return jsonify({"status": "ok", "time": datetime.utcnow().isoformat(),
+                     "active_sessions": len(conversations), "active_jobs": len(_jobs)})
+
 # ── Conversation memory: bounded, token-aware, LRU-evicted ────────
 # Previously: a plain dict that grew forever (every session_id ever seen stayed
 # in memory for the life of the process — a real server-side memory leak), and
@@ -40,6 +82,15 @@ conversations = OrderedDict()   # sid -> {"messages": [...], "summary": "", "sum
 MAX_SESSIONS = 500              # hard cap on concurrent in-memory sessions
 KEEP_RECENT = 8                 # most recent messages always sent verbatim
 HISTORY_TOKEN_BUDGET = 3000     # soft budget (~tokens) for the verbatim tail
+SESSION_TTL_SECONDS = 3600      # auto-purge a session after 1hr of inactivity
+
+# Now that gunicorn actually runs multiple threads concurrently (see render.yaml),
+# this dict gets touched from several requests at once — wrap all access in a
+# lock. Python dicts are individually-atomic but our compound ops (check-then-
+# create, move_to_end + popitem, append-while-another-thread-reads-for-
+# summarization) are not, so without this a race could silently drop a message
+# or corrupt the LRU ordering.
+_conv_lock = threading.Lock()
 
 def _approx_tokens(s):
     return max(1, len(s) // 4)  # ~4 chars/token for English — good enough for budgeting, no tokenizer dep
@@ -51,49 +102,113 @@ def _touch(sid):
         conversations.popitem(last=False)  # evict least-recently-used session
 
 def get_history(sid):
-    if sid not in conversations:
-        conversations[sid] = {"messages": [], "summary": "", "summarized_through": 0, "last_active": time.time()}
-    _touch(sid)
-    return conversations[sid]["messages"]
+    with _conv_lock:
+        if sid not in conversations:
+            conversations[sid] = {"messages": [], "summary": "", "summarized_through": 0, "last_active": time.time()}
+        _touch(sid)
+        return list(conversations[sid]["messages"])  # copy — caller shouldn't mutate live state
 
 def add_to_history(sid, role, content):
-    get_history(sid)  # ensures session exists
-    conversations[sid]["messages"].append({"role": role, "content": content})
-    _touch(sid)
+    with _conv_lock:
+        if sid not in conversations:
+            conversations[sid] = {"messages": [], "summary": "", "summarized_through": 0, "last_active": time.time()}
+        conversations[sid]["messages"].append({"role": role, "content": content})
+        _touch(sid)
+
+def purge_stale_sessions(ttl=SESSION_TTL_SECONDS):
+    """Drop sessions idle longer than ttl seconds. Runs periodically in the
+    background (see _session_janitor) in addition to the MAX_SESSIONS LRU cap
+    — that cap only bites once memory is actually full; this keeps idle
+    sessions from lingering at all."""
+    cutoff = time.time() - ttl
+    with _conv_lock:
+        stale = [sid for sid, sess in conversations.items() if sess["last_active"] < cutoff]
+        for sid in stale:
+            del conversations[sid]
+    return len(stale)
+
+def seed_session_if_empty(sid, client_history):
+    """Session state lives only in this process's memory — a server restart
+    (Render free tier sleeps/restarts routinely), a deploy, or the TTL purge
+    above all wipe it. When that happens the browser's own localStorage still
+    shows the full chat, and the user has no way to know the backend forgot
+    everything — they just see the model suddenly act like a stranger.
+    If the client sends its own local history along and the backend has
+    nothing for this session, rehydrate from it instead of silently starting
+    fresh. This makes the browser's local copy the durable source of truth
+    and the server dict just a cache/summarization aid on top of it."""
+    if not client_history:
+        return
+    with _conv_lock:
+        if sid in conversations and conversations[sid]["messages"]:
+            return  # backend already has real state — don't clobber it with a possibly-stale client copy
+        msgs = []
+        for m in client_history[-40:]:
+            role, content = m.get("role"), m.get("content")
+            if role in ("user", "assistant") and isinstance(content, str) and content:
+                msgs.append({"role": role, "content": content[:4000]})
+        if msgs:
+            conversations[sid] = {"messages": msgs, "summary": "", "summarized_through": 0, "last_active": time.time()}
+            _touch(sid)
+
+def _session_janitor():
+    while True:
+        time.sleep(300)  # every 5 minutes
+        try:
+            purge_stale_sessions()
+            _purge_stale_jobs()
+        except Exception:
+            pass
+
+threading.Thread(target=_session_janitor, daemon=True, name="saom-janitor").start()
 
 def get_context_messages(sid):
     """Build what actually gets sent to the LLM: a compact running summary of
     anything older, plus the most recent turns verbatim, trimmed to a token
     budget. Replaces resending the full raw history every single turn."""
-    sess = conversations.get(sid)
-    if not sess:
-        return []
-    msgs = sess["messages"]
+    with _conv_lock:
+        sess = conversations.get(sid)
+        if not sess:
+            return []
+        msgs = list(sess["messages"])
+        summary = sess["summary"]
+        summarized_through = sess["summarized_through"]
+        _touch(sid)
+
     older = msgs[:-KEEP_RECENT] if len(msgs) > KEEP_RECENT else []
     recent = msgs[-KEEP_RECENT:] if len(msgs) > KEEP_RECENT else msgs
 
     # Fold any newly-aged-out turns into the running summary once (not every
     # turn) so older context is compacted rather than silently dropped.
-    new_to_summarize = older[sess["summarized_through"]:]
+    # The LLM call here happens OUTSIDE the lock — it can take seconds, and
+    # holding a global lock during a network call would serialize every
+    # concurrent user's requests behind it, reintroducing the exact
+    # "everyone blocks on one slow request" problem this whole thing exists
+    # to avoid.
+    new_to_summarize = older[summarized_through:]
     if new_to_summarize:
         try:
             summary_prompt = [
                 {"role": "system", "content": "Condense the following into a short factual summary "
                                                "(2-4 sentences) of what's been discussed, for use as "
                                                "background context. No preamble, just the summary."},
-                {"role": "user", "content": (sess["summary"] + "\n\n" if sess["summary"] else "") +
+                {"role": "user", "content": (summary + "\n\n" if summary else "") +
                     "\n".join(f"{m['role']}: {m['content']}" for m in new_to_summarize)}
             ]
             new_summary = _call_llm(summary_prompt, max_tokens=150)
             if new_summary and not new_summary.startswith("[Error]"):
-                sess["summary"] = new_summary.strip()
-                sess["summarized_through"] = len(older)
+                summary = new_summary.strip()
+                summarized_through = len(older)
+                with _conv_lock:
+                    if sid in conversations:  # session may have been purged while we were summarizing
+                        conversations[sid]["summary"] = summary
+                        conversations[sid]["summarized_through"] = summarized_through
         except Exception:
             pass  # summarization failing isn't fatal — recent turns still go through raw
 
     out = []
-    if sess["summary"]:
-        out.append({"role": "system", "content": f"Earlier in this conversation: {sess['summary']}"})
+    if summary:
+        out.append({"role": "system", "content": f"Earlier in this conversation: {summary}"})
 
     # Token-budget the verbatim tail too, in case any single message is huge
     budget = HISTORY_TOKEN_BUDGET
@@ -129,6 +244,12 @@ To use a tool, reply with ONLY one tag, in exactly this format, and nothing else
   [TOOL:hash:sha256:::text]       md5/sha1/sha256/sha512 hex digest of text
   [TOOL:base64:encode:::text]     base64 encode/decode (use "encode" or "decode" before :::)
   [TOOL:pypi:requests]            look up a PyPI package's latest version, summary, license
+  [TOOL:github:https://github.com/owner/repo]              list a repo's files
+  [TOOL:github:https://github.com/owner/repo/blob/branch/path]  read one file's full content
+
+When asked to review a GitHub repo or find bugs in it, first list the repo to
+see what's there, then fetch the specific files that matter (entry points,
+anything the user named) rather than guessing blindly.
 
 Rules:
 - Prefer search or news first. Only fetch a URL when you need more than the snippet gives you.
@@ -503,7 +624,89 @@ def _tool_base64(arg):
     except Exception as e:
         return f"Base64 error: {e}"
 
-# ── PyPI package lookup (programmer staple) ──────────────────────────
+# ── GitHub link reading (repo trees + individual files) ─────────────
+_GITHUB_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+
+def _gh_headers():
+    h = {"Accept": "application/vnd.github+json"}
+    if _GITHUB_TOKEN:
+        h["Authorization"] = f"Bearer {_GITHUB_TOKEN}"
+    return h
+
+def _gh_rate_limited(r):
+    return r.status_code == 403 and r.headers.get("X-RateLimit-Remaining") == "0"
+
+def _parse_github_url(url):
+    url = url.strip()
+    m = re.match(r'^https?://github\.com/([^/]+)/([^/]+)/blob/([^/]+)/(.+)$', url)
+    if m:
+        owner, repo, branch, path = m.groups()
+        return ("blob", owner, repo.removesuffix(".git"), branch, path)
+    m = re.match(r'^https?://raw\.githubusercontent\.com/([^/]+)/([^/]+)/([^/]+)/(.+)$', url)
+    if m:
+        owner, repo, branch, path = m.groups()
+        return ("blob", owner, repo, branch, path)
+    m = re.match(r'^https?://github\.com/([^/]+)/([^/]+)/tree/([^/]+)/?(.*)$', url)
+    if m:
+        owner, repo, branch, path = m.groups()
+        return ("tree", owner, repo.removesuffix(".git"), branch, path)
+    m = re.match(r'^https?://github\.com/([^/]+)/([^/]+?)(?:\.git)?/?$', url)
+    if m:
+        owner, repo = m.groups()
+        return ("repo", owner, repo, None, "")
+    return None
+
+_CODE_EXTENSIONS = ('.py', '.php', '.js', '.jsx', '.ts', '.tsx', '.html', '.css', '.java',
+                     '.go', '.rb', '.c', '.cpp', '.h', '.cs', '.sql', '.sh', '.json', '.yml', '.yaml')
+
+def _tool_github(url):
+    parsed = _parse_github_url(url)
+    if not parsed:
+        return ("Not a recognized GitHub URL. Use a repo URL (https://github.com/owner/repo) "
+                 "or a file URL (.../blob/branch/path/to/file).")
+    kind, owner, repo, branch, path = parsed
+    try:
+        if kind == "blob":
+            raw_url = f"https://raw.githubusercontent.com/{owner}/{repo}/{branch}/{path}"
+            r = _req.get(raw_url, timeout=15)
+            if r.status_code != 200:
+                return f"Couldn't fetch {path} from {owner}/{repo}@{branch} (HTTP {r.status_code})."
+            content = r.text
+            body = content[:8000] + ("\n... (truncated)" if len(content) > 8000 else "")
+            return f"File: {path} ({len(content)} chars)\n\n{body}"
+
+        # repo or tree — list files so the model (or user) can pick specific ones
+        if not branch:
+            r = _req.get(f"https://api.github.com/repos/{owner}/{repo}", timeout=15, headers=_gh_headers())
+            if _gh_rate_limited(r):
+                return ("GitHub API rate limit hit (60/hr unauthenticated, shared across all users of this "
+                        "server). Set a GITHUB_TOKEN env var to raise it to 5000/hr. Reading individual "
+                        "files by URL still works, since that doesn't use the rate-limited API.")
+            if r.status_code != 200:
+                return f"Couldn't find repo {owner}/{repo} (HTTP {r.status_code})."
+            branch = r.json().get("default_branch", "main")
+
+        r = _req.get(f"https://api.github.com/repos/{owner}/{repo}/git/trees/{branch}?recursive=1",
+                      timeout=15, headers=_gh_headers())
+        if _gh_rate_limited(r):
+            return ("GitHub API rate limit hit (60/hr unauthenticated, shared across all users of this "
+                    "server). Set a GITHUB_TOKEN env var to raise it to 5000/hr. Reading individual "
+                    "files by URL still works, since that doesn't use the rate-limited API.")
+        if r.status_code != 200:
+            return f"Couldn't list {owner}/{repo}@{branch} (HTTP {r.status_code})."
+        tree = r.json().get("tree", [])
+        files = [t["path"] for t in tree if t.get("type") == "blob"]
+        if path:
+            files = [f for f in files if f.startswith(path)]
+        code_files = [f for f in files if f.lower().endswith(_CODE_EXTENSIONS)]
+        shown = code_files or files
+        listing = "\n".join(shown[:60])
+        more = f"\n... and {len(shown) - 60} more" if len(shown) > 60 else ""
+        return (f"{owner}/{repo}@{branch} \u2014 {len(files)} files total"
+                f"{' under ' + path if path else ''}.\n\n{listing}{more}\n\n"
+                f"To read a specific file: [TOOL:github:https://github.com/{owner}/{repo}/blob/{branch}/PATH]")
+    except Exception as e:
+        return f"GitHub error: {e}"
 def _tool_pypi(arg):
     pkg = arg.strip()
     if not pkg:
@@ -560,6 +763,145 @@ def api_web_fetch():
         return jsonify({"error": "No URL"}), 400
     result = _web_fetch(url, max_chars)
     return jsonify(result)
+
+# ── Upload -> background bug analysis -> downloadable fixed file ────
+# Runs as a background thread rather than blocking the request: a real review
+# (static check + an LLM call asking for a full corrected file) can take well
+# over gunicorn's request timeout on a slow provider, so the upload endpoint
+# hands back a job_id immediately and the client polls /api/analyze/<id>.
+_JOBS_LOCK = threading.Lock()
+_jobs = {}  # job_id -> {status, filename, ext, language, code, bugs_report, fixed_code, error, created, updated}
+
+MAX_UPLOAD_BYTES = 300_000  # 300KB is generous for one source file and keeps LLM context sane
+JOB_TTL_SECONDS = 7200      # keep a finished job's result downloadable for 2hrs, then purge
+
+ALLOWED_UPLOAD_EXTENSIONS = {
+    ".py": "Python", ".php": "PHP", ".html": "HTML", ".htm": "HTML", ".js": "JavaScript",
+    ".jsx": "JavaScript", ".ts": "TypeScript", ".tsx": "TypeScript", ".java": "Java",
+    ".go": "Go", ".rb": "Ruby", ".c": "C", ".cpp": "C++", ".h": "C/C++ header",
+    ".cs": "C#", ".css": "CSS", ".sql": "SQL", ".sh": "Shell", ".json": "JSON",
+}
+
+def _purge_stale_jobs():
+    cutoff = time.time() - JOB_TTL_SECONDS
+    with _JOBS_LOCK:
+        stale = [jid for jid, j in _jobs.items() if j["updated"] < cutoff]
+        for jid in stale:
+            del _jobs[jid]
+    return len(stale)
+
+def _static_lint(code, ext):
+    """Best-effort deterministic check before handing off to the LLM. Catches
+    hard syntax errors reliably instead of hoping the model notices them."""
+    if ext == ".py":
+        try:
+            ast.parse(code)
+            return "No syntax errors (ast.parse)."
+        except SyntaxError as e:
+            return f"SyntaxError: {e.msg} at line {e.lineno}, column {e.offset}"
+    if ext == ".php":
+        try:
+            r = subprocess.run(["php", "-l"], input=code, capture_output=True, text=True, timeout=15)
+            return (r.stdout or r.stderr).strip() or "No output from php -l."
+        except FileNotFoundError:
+            return "(php CLI not installed on this server \u2014 skipping lint, LLM review only)"
+        except Exception as e:
+            return f"(php lint error: {e})"
+    if ext == ".json":
+        try:
+            json.loads(code)
+            return "Valid JSON."
+        except json.JSONDecodeError as e:
+            return f"Invalid JSON: {e.msg} at line {e.lineno}, column {e.colno}"
+    return "(no static linter for this file type \u2014 LLM review only)"
+
+def _run_analysis_job(job_id):
+    with _JOBS_LOCK:
+        job = _jobs.get(job_id)
+        if not job:
+            return
+        job["status"] = "running"
+        job["updated"] = time.time()
+        code, ext, filename = job["code"], job["ext"], job["filename"]
+
+    lint_result = _static_lint(code, ext)
+    prompt = [
+        {"role": "system", "content":
+            "You are a careful code reviewer. You'll be given a source file and a static-analysis "
+            "result. Find real bugs (logic errors, security issues, off-by-ones, unhandled errors, "
+            "resource leaks) \u2014 don't invent issues that aren't there. Respond in EXACTLY this format:\n\n"
+            "## Bugs found\n"
+            "(numbered list, one line each: what's wrong and why, cite line numbers where you can. "
+            "If there are genuinely no bugs, say so plainly instead of inventing some.)\n\n"
+            "## Fixed code\n"
+            "```\n(the complete corrected file \u2014 not a diff or snippet, the whole file)\n```"},
+        {"role": "user", "content": f"File: {filename}\nStatic check result: {lint_result}\n\n```\n{code}\n```"}
+    ]
+    try:
+        reply = _call_llm(prompt, max_tokens=4000)
+        blocks = re.findall(r'```[a-zA-Z0-9_+-]*\n(.*?)```', reply, re.DOTALL)
+        fixed_code = blocks[-1].rstrip("\n") if blocks else code
+        bugs_section = reply.split("## Fixed code")[0].strip() if "## Fixed code" in reply else reply
+        with _JOBS_LOCK:
+            job = _jobs.get(job_id)
+            if job:
+                job.update(status="done", bugs_report=bugs_section, fixed_code=fixed_code,
+                           lint_result=lint_result, updated=time.time())
+    except Exception as e:
+        with _JOBS_LOCK:
+            job = _jobs.get(job_id)
+            if job:
+                job.update(status="error", error=str(e), updated=time.time())
+
+@app.route("/api/upload", methods=["POST"])
+def api_upload():
+    f = request.files.get("file")
+    if not f or not f.filename:
+        return jsonify({"error": "No file uploaded"}), 400
+    ext = Path(f.filename).suffix.lower()
+    if ext not in ALLOWED_UPLOAD_EXTENSIONS:
+        return jsonify({"error": f"Unsupported file type '{ext}'. Allowed: "
+                                  f"{', '.join(sorted(ALLOWED_UPLOAD_EXTENSIONS))}"}), 400
+    raw = f.read()
+    if len(raw) > MAX_UPLOAD_BYTES:
+        return jsonify({"error": f"File too large ({len(raw):,} bytes, max {MAX_UPLOAD_BYTES:,})"}), 400
+    try:
+        code = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return jsonify({"error": "File isn't valid UTF-8 text"}), 400
+
+    job_id = uuid.uuid4().hex
+    now = time.time()
+    with _JOBS_LOCK:
+        _jobs[job_id] = {"status": "queued", "filename": f.filename, "ext": ext,
+                          "language": ALLOWED_UPLOAD_EXTENSIONS[ext], "code": code,
+                          "bugs_report": "", "fixed_code": "", "lint_result": "", "error": "",
+                          "created": now, "updated": now}
+    threading.Thread(target=_run_analysis_job, args=(job_id,), daemon=True, name=f"analyze-{job_id[:8]}").start()
+    return jsonify({"job_id": job_id, "filename": f.filename,
+                     "language": ALLOWED_UPLOAD_EXTENSIONS[ext], "size": len(raw)})
+
+@app.route("/api/analyze/<job_id>")
+def api_analyze_status(job_id):
+    with _JOBS_LOCK:
+        job = _jobs.get(job_id)
+        if not job:
+            return jsonify({"error": "Unknown job_id (expired or never existed)"}), 404
+        return jsonify({"status": job["status"], "filename": job["filename"], "language": job["language"],
+                         "bugs_report": job.get("bugs_report", ""), "error": job.get("error", ""),
+                         "lint_result": job.get("lint_result", ""), "has_fixed_code": bool(job.get("fixed_code"))})
+
+@app.route("/api/download/<job_id>")
+def api_download(job_id):
+    with _JOBS_LOCK:
+        job = _jobs.get(job_id)
+        if not job or job["status"] != "done" or not job.get("fixed_code"):
+            return jsonify({"error": "Not ready, failed, or job not found"}), 404
+        fixed_code, filename = job["fixed_code"], job["filename"]
+    stem, ext = Path(filename).stem, Path(filename).suffix
+    buf = io.BytesIO(fixed_code.encode("utf-8"))
+    buf.seek(0)
+    return send_file(buf, mimetype="text/plain", as_attachment=True, download_name=f"{stem}_fixed{ext}")
 
 # ── File operations ──────────────────────────────────────────────
 @app.route("/api/file/read", methods=["POST"])
@@ -676,6 +1018,10 @@ def detect_tool_call(message):
         return ("base64", msg[7:].strip())
     if msg.lower().startswith("pypi "):
         return ("pypi", msg[5:].strip())
+    if msg.lower().startswith("github "):
+        return ("github", msg[7:].strip())
+    if re.match(r'^https?://(github\.com|raw\.githubusercontent\.com)/', msg, re.IGNORECASE):
+        return ("github", msg)
     return None
 
 def execute_tool_call(tool_name, arg):
@@ -720,6 +1066,8 @@ def execute_tool_call(tool_name, arg):
         return _tool_base64(arg)
     if tool_name == "pypi":
         return _tool_pypi(arg)
+    if tool_name == "github":
+        return _tool_github(arg)
     if tool_name == "python":
         try:
             r = subprocess.run([sys.executable, "-c", arg], capture_output=True, text=True, timeout=30)
@@ -798,6 +1146,7 @@ def api_chat_stream():
             return
 
         # Regular LLM chat with auto tool execution
+        seed_session_if_empty(sid, data.get("history"))
         add_to_history(sid, "user", message)
         round_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + get_context_messages(sid)
 
@@ -910,6 +1259,7 @@ def api_chat():
         return jsonify({"response": result})
 
     # LLM with memory + auto tools
+    seed_session_if_empty(sid, data.get("history"))
     add_to_history(sid, "user", message)
     round_messages = [{"role": "system", "content": SYSTEM_PROMPT}] + get_context_messages(sid)
 
